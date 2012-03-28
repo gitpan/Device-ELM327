@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Device-ELM327
-version:            0.01
+version:            0.02
 abstract:           Methods for reading ODB data with an ELM327 module.
 author:
     - Alister Perrott <aperrott@cpan.org>

@@ -35,24 +35,25 @@ Device::ELM327 - Methods for reading ODB data with an ELM327 module.
 
 =head1 VERSION
 
-Version 0.01
+Version 0.02
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
+#*****************************************************************
 
 =head1 SYNOPSIS
 
 This module provides a Perl interface to a device containing an Elm Electronics ELM327 OBD Interpreter and provides access to the following functions:
 
-    Read OBD parameters and extract individual values from results
-    Read OBD Trouble Codes and expand them to their full form
-    Reset OBD Trouble Codes
-    Read ELM327 parameters
-    Write and write the ELM327 data byte
-    Calibrate ELM327 Voltage
-    Switchable diagnostic trace and replay function for debugging
+Read OBD parameters and extract individual values from results
+Read OBD Trouble Codes and expand them to their full form
+Reset OBD Trouble Codes
+Read ELM327 parameters
+Write and write the ELM327 data byte
+Calibrate ELM327 Voltage
+Switchable diagnostic trace and replay function for debugging
 
 The module is written entirely in Perl and works with both Linux and Windows. Depending on which operating system it is run on it uses either the Win32::SerialPort or Device::SerialPort module so it should work on any platform that supports one of them.
 
@@ -72,32 +73,35 @@ The module is written entirely in Perl and works with both Linux and Windows. De
 =head1 SUBROUTINES/METHODS
 
 
-#*****************************************************************
-
 =head2 new
 This is the constructor for the module.
 
 To open the device and have it search for an ELM module:
-my $obd = Device::ELM327->new();
+
+	my $obd = Device::ELM327->new();
 
 If you know the port name (e.g. 'COM5', '/dev/ttyUSB7' etc) it may be 
 quicker to pass it into the function:
-my $obd = Device::ELM327->new($port_name);
+
+	my $obd = Device::ELM327->new($port_name);
 
 If you want extra debugging information, it can be enabled by setting 
 $debug_level to a positive number in the range 1 to 3, with more 
 information being displayed as the number increases:
-my $obd = Device::ELM327->new($port_name, $debug_level);
+
+	my $obd = Device::ELM327->new($port_name, $debug_level);
 
 A value of either undef or "" can be passed for the $port_name:
-my $obd = Device::ELM327->new(undef, $debug_level);
+
+	my $obd = Device::ELM327->new(undef, $debug_level);
 
 The module can replay captured debugging information (previously
 produced by setting $debug_level to 1 or higher and piping the output
 to a text file: perl test.pl&>test_output.txt). To do this, pass
 the path and name of the file containing the debugging information
 as $replay_filename:
-my $obd = Device_ELM327->new(undef, $debug_level, $replay_filename);
+
+	my $obd = Device_ELM327->new(undef, $debug_level, $replay_filename);
 =cut
 
 sub new
@@ -156,22 +160,22 @@ sub new
             {name => "Absolute Throttle Position", type => "bool_2", modifier => "&128", unit => ""},
             {name => "Commanded Secondary Air Status", type => "bool_2", modifier => "&64", unit => ""},
             {name => "Location of oxygen sensors 13", type => "bool_2", modifier => "&32", unit => ""},
-            {name => "Bank 1 – Sensor 1", type => "bool_2", modifier => "&16", unit => ""},
-            {name => "Bank 1 – Sensor 2", type => "bool_2", modifier => "&8", unit => ""},
+            {name => "Bank 1 - Sensor 1", type => "bool_2", modifier => "&16", unit => ""},
+            {name => "Bank 1 - Sensor 2", type => "bool_2", modifier => "&8", unit => ""},
             
-            {name => "Bank 1 – Sensor 3", type => "bool_2", modifier => "&4", unit => ""},
-            {name => "Bank 1 – Sensor 4", type => "bool_2", modifier => "&2", unit => ""},
-            {name => "Bank 2 – Sensor 1 13", type => "bool_2", modifier => "&1", unit => ""},
-            {name => "Bank 2 – Sensor 1 1D", type => "bool_2", modifier => "&4", unit => ""},
-            {name => "Bank 2 – Sensor 2 1D", type => "bool_2", modifier => "&2", unit => ""},
-            {name => "Bank 3 – Sensor 1", type => "bool_2", modifier => "&1", unit => ""},
+            {name => "Bank 1 - Sensor 3", type => "bool_2", modifier => "&4", unit => ""},
+            {name => "Bank 1 - Sensor 4", type => "bool_2", modifier => "&2", unit => ""},
+            {name => "Bank 2 - Sensor 1 13", type => "bool_2", modifier => "&1", unit => ""},
+            {name => "Bank 2 - Sensor 1 1D", type => "bool_2", modifier => "&4", unit => ""},
+            {name => "Bank 2 - Sensor 2 1D", type => "bool_2", modifier => "&2", unit => ""},
+            {name => "Bank 3 - Sensor 1", type => "bool_2", modifier => "&1", unit => ""},
             
-            {name => "Bank 2 – Sensor 2 13", type => "bool_3", modifier => "&128", unit => ""},
-            {name => "Bank 2 – Sensor 3", type => "bool_3", modifier => "&64", unit => ""},
-            {name => "Bank 2 – Sensor 4", type => "bool_3", modifier => "&32", unit => ""},
-            {name => "Bank 3 – Sensor 2", type => "bool_3", modifier => "&128", unit => ""},
-            {name => "Bank 4 – Sensor 1", type => "bool_3", modifier => "&64", unit => ""},
-            {name => "Bank 4 – Sensor 2", type => "bool_3", modifier => "&32", unit => ""},
+            {name => "Bank 2 - Sensor 2 13", type => "bool_3", modifier => "&128", unit => ""},
+            {name => "Bank 2 - Sensor 3", type => "bool_3", modifier => "&64", unit => ""},
+            {name => "Bank 2 - Sensor 4", type => "bool_3", modifier => "&32", unit => ""},
+            {name => "Bank 3 - Sensor 2", type => "bool_3", modifier => "&128", unit => ""},
+            {name => "Bank 4 - Sensor 1", type => "bool_3", modifier => "&64", unit => ""},
+            {name => "Bank 4 - Sensor 2", type => "bool_3", modifier => "&32", unit => ""},
             {name => "OBD requirements to which vehicle is designed", type => "bool_3", modifier => "&16", unit => ""},
             {name => "Location of oxygen sensors 1D", type => "bool_3", modifier => "&8", unit => ""},
             {name => "Auxiliary Input Status", type => "bool_3", modifier => "&4", unit => ""},
@@ -285,86 +289,86 @@ sub new
             {name => "Bank 2 - Sensor 4 present", type => "bool_0", modifier => "&128", unit => ""}
             ] },
 
-            "Bank 1 – Sensor 1" => { command => "01 14",
+            "Bank 1 - Sensor 1" => { command => "01 14",
             result => [
             {name => "Oxygen Sensor Output Voltage (Bx-Sy)", type => "byte_0", modifier => "*0.005", unit => "V"},
             {name => "Short Term Fuel Trim (Bx-Sy)", type => "byte_1", modifier => "*100/255", unit => "%"}
             ] },
             
-            "Bank 1 – Sensor 2" => { command => "01 15",
+            "Bank 1 - Sensor 2" => { command => "01 15",
             result => [
             {name => "Oxygen Sensor Output Voltage (Bx-Sy)", type => "byte_0", modifier => "*0.005", unit => "V"},
             {name => "Short Term Fuel Trim (Bx-Sy)", type => "byte_1", modifier => "*100/255", unit => "%"}
             ] },
 
-            "Bank 1 – Sensor 3" => { command => "01 16",
+            "Bank 1 - Sensor 3" => { command => "01 16",
             result => [
             {name => "Oxygen Sensor Output Voltage (Bx-Sy)", type => "byte_0", modifier => "*0.005", unit => "V"},
             {name => "Short Term Fuel Trim (Bx-Sy)", type => "byte_1", modifier => "*100/255", unit => "%"}
             ] },
 
-            "Bank 1 – Sensor 4" => { command => "01 17",
+            "Bank 1 - Sensor 4" => { command => "01 17",
             result => [
             {name => "Oxygen Sensor Output Voltage (Bx-Sy)", type => "byte_0", modifier => "*0.005", unit => "V"},
             {name => "Short Term Fuel Trim (Bx-Sy)", type => "byte_1", modifier => "*100/255", unit => "%"}
             ] },
 
-            "Bank 2 – Sensor 1 13" => { command => "01 18",
+            "Bank 2 - Sensor 1 13" => { command => "01 18",
             result => [
             {name => "Oxygen Sensor Output Voltage (Bx-Sy)", type => "byte_0", modifier => "*0.005", unit => "V"},
             {name => "Short Term Fuel Trim (Bx-Sy)", type => "byte_1", modifier => "*100/255", unit => "%"}
             ] },
 
-            "Bank 2 – Sensor 2 13" => { command => "01 19",
+            "Bank 2 - Sensor 2 13" => { command => "01 19",
             result => [
             {name => "Oxygen Sensor Output Voltage (Bx-Sy)", type => "byte_0", modifier => "*0.005", unit => "V"},
             {name => "Short Term Fuel Trim (Bx-Sy)", type => "byte_1", modifier => "*100/255", unit => "%"}
             ] },
 
-            "Bank 2 – Sensor 3" => { command => "01 1A",
+            "Bank 2 - Sensor 3" => { command => "01 1A",
             result => [
             {name => "Oxygen Sensor Output Voltage (Bx-Sy)", type => "byte_0", modifier => "*0.005", unit => "V"},
             {name => "Short Term Fuel Trim (Bx-Sy)", type => "byte_1", modifier => "*100/255", unit => "%"}
             ] },
 
-            "Bank 2 – Sensor 4" => { command => "01 1B",
+            "Bank 2 - Sensor 4" => { command => "01 1B",
             result => [
             {name => "Oxygen Sensor Output Voltage (Bx-Sy)", type => "byte_0", modifier => "*0.005", unit => "V"},
             {name => "Short Term Fuel Trim (Bx-Sy)", type => "byte_1", modifier => "*100/255", unit => "%"}
             ] },
 
 
-            "Bank 2 – Sensor 1 1D" => { command => "01 16",
+            "Bank 2 - Sensor 1 1D" => { command => "01 16",
             result => [
             {name => "Oxygen Sensor Output Voltage (Bx-Sy)", type => "byte_0", modifier => "*0.005", unit => "V"},
             {name => "Short Term Fuel Trim (Bx-Sy)", type => "byte_1", modifier => "*100/255", unit => "%"}
             ] },
 
-            "Bank 2 – Sensor 2 1D" => { command => "01 17",
+            "Bank 2 - Sensor 2 1D" => { command => "01 17",
             result => [
             {name => "Oxygen Sensor Output Voltage (Bx-Sy)", type => "byte_0", modifier => "*0.005", unit => "V"},
             {name => "Short Term Fuel Trim (Bx-Sy)", type => "byte_1", modifier => "*100/255", unit => "%"}
             ] },
             
-            "Bank 3 – Sensor 1" => { command => "01 18",
+            "Bank 3 - Sensor 1" => { command => "01 18",
             result => [
             {name => "Oxygen Sensor Output Voltage (Bx-Sy)", type => "byte_0", modifier => "*0.005", unit => "V"},
             {name => "Short Term Fuel Trim (Bx-Sy)", type => "byte_1", modifier => "*100/255", unit => "%"}
             ] },
 
-            "Bank 3 – Sensor 2" => { command => "01 19",
+            "Bank 3 - Sensor 2" => { command => "01 19",
             result => [
             {name => "Oxygen Sensor Output Voltage (Bx-Sy)", type => "byte_0", modifier => "*0.005", unit => "V"},
             {name => "Short Term Fuel Trim (Bx-Sy)", type => "byte_1", modifier => "*100/255", unit => "%"}
             ] },
 
-            "Bank 4 – Sensor 1" => { command => "01 1A",
+            "Bank 4 - Sensor 1" => { command => "01 1A",
             result => [
             {name => "Oxygen Sensor Output Voltage (Bx-Sy)", type => "byte_0", modifier => "*0.005", unit => "V"},
             {name => "Short Term Fuel Trim (Bx-Sy)", type => "byte_1", modifier => "*100/255", unit => "%"}
             ] },
 
-            "Bank 4 – Sensor 2" => { command => "01 1B",
+            "Bank 4 - Sensor 2" => { command => "01 1B",
             result => [
             {name => "Oxygen Sensor Output Voltage (Bx-Sy)", type => "byte_0", modifier => "*0.005", unit => "V"},
             {name => "Short Term Fuel Trim (Bx-Sy)", type => "byte_1", modifier => "*100/255", unit => "%"}
@@ -409,22 +413,22 @@ sub new
             {name => "Distance Travelled While MIL is Activated", type => "bool_0", modifier => "&128", unit => ""},
             {name => "Fuel Rail Pressure relative to manifold vacuum", type => "bool_0", modifier => "&64", unit => ""},
             {name => "Fuel Rail Pressure", type => "bool_0", modifier => "&32", unit => ""},
-            {name => "Bank 1 – Sensor 1 (wide range O2S)", type => "bool_0", modifier => "&16", unit => ""},
-            {name => "Bank 1 – Sensor 2 (wide range O2S)", type => "bool_0", modifier => "&8", unit => ""},
+            {name => "Bank 1 - Sensor 1 (wide range O2S)", type => "bool_0", modifier => "&16", unit => ""},
+            {name => "Bank 1 - Sensor 2 (wide range O2S)", type => "bool_0", modifier => "&8", unit => ""},
             
-            {name => "Bank 1 – Sensor 3 (wide range O2S)", type => "bool_0", modifier => "&4", unit => ""},
-            {name => "Bank 1 – Sensor 4 (wide range O2S)", type => "bool_0", modifier => "&2", unit => ""},
-            {name => "Bank 2 – Sensor 1 (wide range O2S) 13", type => "bool_0", modifier => "&1", unit => ""},
-            {name => "Bank 2 – Sensor 1 (wide range O2S) 1D", type => "bool_0", modifier => "&4", unit => ""},
-            {name => "Bank 2 – Sensor 2 (wide range O2S) 1D", type => "bool_0", modifier => "&2", unit => ""},
-            {name => "Bank 3 – Sensor 1 (wide range O2S)", type => "bool_0", modifier => "&1", unit => ""},
+            {name => "Bank 1 - Sensor 3 (wide range O2S)", type => "bool_0", modifier => "&4", unit => ""},
+            {name => "Bank 1 - Sensor 4 (wide range O2S)", type => "bool_0", modifier => "&2", unit => ""},
+            {name => "Bank 2 - Sensor 1 (wide range O2S) 13", type => "bool_0", modifier => "&1", unit => ""},
+            {name => "Bank 2 - Sensor 1 (wide range O2S) 1D", type => "bool_0", modifier => "&4", unit => ""},
+            {name => "Bank 2 - Sensor 2 (wide range O2S) 1D", type => "bool_0", modifier => "&2", unit => ""},
+            {name => "Bank 3 - Sensor 1 (wide range O2S)", type => "bool_0", modifier => "&1", unit => ""},
 
-            {name => "Bank 2 – Sensor 2 (wide range O2S) 13", type => "bool_1", modifier => "&128", unit => ""},
-            {name => "Bank 2 – Sensor 3 (wide range O2S)", type => "bool_1", modifier => "&64", unit => ""},
-            {name => "Bank 2 – Sensor 4 (wide range O2S)", type => "bool_1", modifier => "&32", unit => ""},
-            {name => "Bank 3 – Sensor 2 (wide range O2S)", type => "bool_1", modifier => "&128", unit => ""},
-            {name => "Bank 4 – Sensor 1 (wide range O2S)", type => "bool_1", modifier => "&64", unit => ""},
-            {name => "Bank 4 – Sensor 2 (wide range O2S)", type => "bool_1", modifier => "&32", unit => ""},
+            {name => "Bank 2 - Sensor 2 (wide range O2S) 13", type => "bool_1", modifier => "&128", unit => ""},
+            {name => "Bank 2 - Sensor 3 (wide range O2S)", type => "bool_1", modifier => "&64", unit => ""},
+            {name => "Bank 2 - Sensor 4 (wide range O2S)", type => "bool_1", modifier => "&32", unit => ""},
+            {name => "Bank 3 - Sensor 2 (wide range O2S)", type => "bool_1", modifier => "&128", unit => ""},
+            {name => "Bank 4 - Sensor 1 (wide range O2S)", type => "bool_1", modifier => "&64", unit => ""},
+            {name => "Bank 4 - Sensor 2 (wide range O2S)", type => "bool_1", modifier => "&32", unit => ""},
             
             {name => "Commanded EGR", type => "bool_1", modifier => "&16", unit => ""},
             {name => "EGR Error", type => "bool_1", modifier => "&8", unit => ""},
@@ -435,22 +439,22 @@ sub new
             {name => "Distance since diagnostic trouble codes cleared", type => "bool_2", modifier => "&128", unit => ""},
             {name => "Evap System Vapor Pressure", type => "bool_2", modifier => "&64", unit => ""},
             {name => "Barometric Pressure", type => "bool_2", modifier => "&32", unit => ""},
-            {name => "Bank 1 – Sensor 1 (wide range O2S) current", type => "bool_2", modifier => "&16", unit => ""},
-            {name => "Bank 1 – Sensor 2 (wide range O2S) current", type => "bool_2", modifier => "&8", unit => ""},
-            {name => "Bank 1 – Sensor 3 (wide range O2S) current", type => "bool_2", modifier => "&4", unit => ""},
-            {name => "Bank 1 – Sensor 4 (wide range O2S) current", type => "bool_2", modifier => "&2", unit => ""},
-            {name => "Bank 2 – Sensor 1 (wide range O2S) current 13", type => "bool_2", modifier => "&1", unit => ""},
+            {name => "Bank 1 - Sensor 1 (wide range O2S) current", type => "bool_2", modifier => "&16", unit => ""},
+            {name => "Bank 1 - Sensor 2 (wide range O2S) current", type => "bool_2", modifier => "&8", unit => ""},
+            {name => "Bank 1 - Sensor 3 (wide range O2S) current", type => "bool_2", modifier => "&4", unit => ""},
+            {name => "Bank 1 - Sensor 4 (wide range O2S) current", type => "bool_2", modifier => "&2", unit => ""},
+            {name => "Bank 2 - Sensor 1 (wide range O2S) current 13", type => "bool_2", modifier => "&1", unit => ""},
 
-            {name => "Bank 2 – Sensor 1 (wide range O2S) current 1D", type => "bool_2", modifier => "&4", unit => ""},
-            {name => "Bank 2 – Sensor 2 (wide range O2S) current 1D", type => "bool_2", modifier => "&2", unit => ""},
-            {name => "Bank 3 – Sensor 1 (wide range O2S) current", type => "bool_2", modifier => "&1", unit => ""},
+            {name => "Bank 2 - Sensor 1 (wide range O2S) current 1D", type => "bool_2", modifier => "&4", unit => ""},
+            {name => "Bank 2 - Sensor 2 (wide range O2S) current 1D", type => "bool_2", modifier => "&2", unit => ""},
+            {name => "Bank 3 - Sensor 1 (wide range O2S) current", type => "bool_2", modifier => "&1", unit => ""},
             
-            {name => "Bank 2 – Sensor 2 (wide range O2S) current 13", type => "bool_3", modifier => "&128", unit => ""},
-            {name => "Bank 2 – Sensor 3 (wide range O2S) current", type => "bool_3", modifier => "&64", unit => ""},
-            {name => "Bank 2 – Sensor 4 (wide range O2S) current", type => "bool_3", modifier => "&32", unit => ""},
-            {name => "Bank 3 – Sensor 2 (wide range O2S) current", type => "bool_3", modifier => "&128", unit => ""},
-            {name => "Bank 4 – Sensor 1 (wide range O2S) current", type => "bool_3", modifier => "&64", unit => ""},
-            {name => "Bank 4 – Sensor 2 (wide range O2S) current", type => "bool_3", modifier => "&32", unit => ""},
+            {name => "Bank 2 - Sensor 2 (wide range O2S) current 13", type => "bool_3", modifier => "&128", unit => ""},
+            {name => "Bank 2 - Sensor 3 (wide range O2S) current", type => "bool_3", modifier => "&64", unit => ""},
+            {name => "Bank 2 - Sensor 4 (wide range O2S) current", type => "bool_3", modifier => "&32", unit => ""},
+            {name => "Bank 3 - Sensor 2 (wide range O2S) current", type => "bool_3", modifier => "&128", unit => ""},
+            {name => "Bank 4 - Sensor 1 (wide range O2S) current", type => "bool_3", modifier => "&64", unit => ""},
+            {name => "Bank 4 - Sensor 2 (wide range O2S) current", type => "bool_3", modifier => "&32", unit => ""},
             {name => "Catalyst Temperature Bank 1, Sensor 1", type => "bool_3", modifier => "&16", unit => ""},
             {name => "Catalyst Temperature Bank 1, Sensor 2", type => "bool_3", modifier => "&8", unit => ""},
             {name => "Catalyst Temperature Bank 2, Sensor 1", type => "bool_3", modifier => "&4", unit => ""},
@@ -462,86 +466,86 @@ sub new
             "Fuel Rail Pressure relative to manifold vacuum" => { command => "01 22", result => [{type => "word_0", modifier => "*0.079", unit => "kPa"}] },
             "Fuel Rail Pressure" => { command => "01 23", result => [{type => "word_0", modifier => "*10", unit => "kPa"}] },
 
-            "Bank 1 – Sensor 1 (wide range O2S)" => { command => "01 24",
+            "Bank 1 - Sensor 1 (wide range O2S)" => { command => "01 24",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Voltage (Bx-Sy)", type => "word_1", modifier => "*0.000122", unit => "V"}
             ] },
             
-            "Bank 1 – Sensor 2 (wide range O2S)" => { command => "01 25",
+            "Bank 1 - Sensor 2 (wide range O2S)" => { command => "01 25",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Voltage (Bx-Sy)", type => "word_1", modifier => "*0.000122", unit => "V"}
             ] },
 
-            "Bank 1 – Sensor 3 (wide range O2S)" => { command => "01 26",
+            "Bank 1 - Sensor 3 (wide range O2S)" => { command => "01 26",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Voltage (Bx-Sy)", type => "word_1", modifier => "*0.000122", unit => "V"}
             ] },
 
-            "Bank 1 – Sensor 4 (wide range O2S)" => { command => "01 27",
+            "Bank 1 - Sensor 4 (wide range O2S)" => { command => "01 27",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Voltage (Bx-Sy)", type => "word_1", modifier => "*0.000122", unit => "V"}
             ] },
 
-            "Bank 2 – Sensor 1 (wide range O2S) 13" => { command => "01 28",
+            "Bank 2 - Sensor 1 (wide range O2S) 13" => { command => "01 28",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Voltage (Bx-Sy)", type => "word_1", modifier => "*0.000122", unit => "V"}
             ] },
 
-            "Bank 2 – Sensor 2 (wide range O2S) 13" => { command => "01 29",
+            "Bank 2 - Sensor 2 (wide range O2S) 13" => { command => "01 29",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Voltage (Bx-Sy)", type => "word_1", modifier => "*0.000122", unit => "V"}
             ] },
 
-            "Bank 2 – Sensor 3 (wide range O2S)" => { command => "01 2A",
+            "Bank 2 - Sensor 3 (wide range O2S)" => { command => "01 2A",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Voltage (Bx-Sy)", type => "word_1", modifier => "*0.000122", unit => "V"}
             ] },
 
-            "Bank 2 – Sensor 4 (wide range O2S)" => { command => "01 2B",
+            "Bank 2 - Sensor 4 (wide range O2S)" => { command => "01 2B",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Voltage (Bx-Sy)", type => "word_1", modifier => "*0.000122", unit => "V"}
             ] },
 
 
-            "Bank 2 – Sensor 1 (wide range O2S) 1D" => { command => "01 26",
+            "Bank 2 - Sensor 1 (wide range O2S) 1D" => { command => "01 26",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Voltage (Bx-Sy)", type => "word_1", modifier => "*0.000122", unit => "V"}
             ] },
 
-            "Bank 2 – Sensor 2 (wide range O2S) 1D" => { command => "01 27",
+            "Bank 2 - Sensor 2 (wide range O2S) 1D" => { command => "01 27",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Voltage (Bx-Sy)", type => "word_1", modifier => "*0.000122", unit => "V"}
             ] },
 
-            "Bank 3 – Sensor 1 (wide range O2S)" => { command => "01 28",
+            "Bank 3 - Sensor 1 (wide range O2S)" => { command => "01 28",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Voltage (Bx-Sy)", type => "word_1", modifier => "*0.000122", unit => "V"}
             ] },
 
-            "Bank 3 – Sensor 2 (wide range O2S)" => { command => "01 29",
+            "Bank 3 - Sensor 2 (wide range O2S)" => { command => "01 29",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Voltage (Bx-Sy)", type => "word_1", modifier => "*0.000122", unit => "V"}
             ] },
 
-            "Bank 4 – Sensor 1 (wide range O2S)" => { command => "01 2A",
+            "Bank 4 - Sensor 1 (wide range O2S)" => { command => "01 2A",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Voltage (Bx-Sy)", type => "word_1", modifier => "*0.000122", unit => "V"}
             ] },
 
-            "Bank 4 – Sensor 2 (wide range O2S)" => { command => "01 2B",
+            "Bank 4 - Sensor 2 (wide range O2S)" => { command => "01 2B",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Voltage (Bx-Sy)", type => "word_1", modifier => "*0.000122", unit => "V"}
@@ -556,86 +560,86 @@ sub new
             "Evap System Vapor Pressure" => { command => "01 32", result => [{type => "signed_word_0", modifier => "*0.25", unit => "Pa"}] },
             "Barometric Pressure" => { command => "01 33", result => [{type => "byte_0", modifier => "+0", unit => "kPa"}] },
 
-            "Bank 1 – Sensor 1 (wide range O2S) current" => { command => "01 34",
+            "Bank 1 - Sensor 1 (wide range O2S) current" => { command => "01 34",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Current (Bx-Sy)", type => "signed_word_1", modifier => "*0.000122", unit => "A"}
             ] },
             
-            "Bank 1 – Sensor 2 (wide range O2S) current" => { command => "01 35",
+            "Bank 1 - Sensor 2 (wide range O2S) current" => { command => "01 35",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Current (Bx-Sy)", type => "signed_word_1", modifier => "*0.000122", unit => "A"}
             ] },
 
-            "Bank 1 – Sensor 3 (wide range O2S) current" => { command => "01 36",
+            "Bank 1 - Sensor 3 (wide range O2S) current" => { command => "01 36",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Current (Bx-Sy)", type => "signed_word_1", modifier => "*0.000122", unit => "A"}
             ] },
 
-            "Bank 1 – Sensor 4 (wide range O2S) current" => { command => "01 37",
+            "Bank 1 - Sensor 4 (wide range O2S) current" => { command => "01 37",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Current (Bx-Sy)", type => "signed_word_1", modifier => "*0.000122", unit => "A"}
             ] },
 
-            "Bank 2 – Sensor 1 (wide range O2S) current 13" => { command => "01 38",
+            "Bank 2 - Sensor 1 (wide range O2S) current 13" => { command => "01 38",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Currente (Bx-Sy)", type => "signed_word_1", modifier => "*0.000122", unit => "A"}
             ] },
 
-            "Bank 2 – Sensor 2 (wide range O2S) current 13" => { command => "01 39",
+            "Bank 2 - Sensor 2 (wide range O2S) current 13" => { command => "01 39",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Current (Bx-Sy)", type => "signed_word_1", modifier => "*0.000122", unit => "A"}
             ] },
 
-            "Bank 2 – Sensor 3 (wide range O2S) current" => { command => "01 3A",
+            "Bank 2 - Sensor 3 (wide range O2S) current" => { command => "01 3A",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Current (Bx-Sy)", type => "signed_word_1", modifier => "*0.000122", unit => "A"}
             ] },
 
-            "Bank 2 – Sensor 4 (wide range O2S) current" => { command => "01 3B",
+            "Bank 2 - Sensor 4 (wide range O2S) current" => { command => "01 3B",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Current (Bx-Sy)", type => "signed_word_1", modifier => "*0.000122", unit => "A"}
             ] },
 
 
-            "Bank 2 – Sensor 1 (wide range O2S) current 1D" => { command => "01 36",
+            "Bank 2 - Sensor 1 (wide range O2S) current 1D" => { command => "01 36",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Current (Bx-Sy)", type => "signed_word_1", modifier => "*0.000122", unit => "A"}
             ] },
 
-            "Bank 2 – Sensor 2 (wide range O2S) current 1D" => { command => "01 37",
+            "Bank 2 - Sensor 2 (wide range O2S) current 1D" => { command => "01 37",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Current (Bx-Sy)", type => "signed_word_1", modifier => "*0.000122", unit => "A"}
             ] },
 
-            "Bank 3 – Sensor 1 (wide range O2S) current" => { command => "01 38",
+            "Bank 3 - Sensor 1 (wide range O2S) current" => { command => "01 38",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Current (Bx-Sy)", type => "signed_word_1", modifier => "*0.000122", unit => "A"}
             ] },
 
-            "Bank 3 – Sensor 2 (wide range O2S) current" => { command => "01 39",
+            "Bank 3 - Sensor 2 (wide range O2S) current" => { command => "01 39",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Current (Bx-Sy)", type => "signed_word_1", modifier => "*0.000122", unit => "A"}
             ] },
 
-            "Bank 4 – Sensor 1 (wide range O2S) current" => { command => "01 3A",
+            "Bank 4 - Sensor 1 (wide range O2S) current" => { command => "01 3A",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Current (Bx-Sy)", type => "signed_word_1", modifier => "*0.000122", unit => "A"}
             ] },
 
-            "Bank 4 – Sensor 2 (wide range O2S) current" => { command => "01 3B",
+            "Bank 4 - Sensor 2 (wide range O2S) current" => { command => "01 3B",
             result => [
             {name => "Equivalence Ratio (lambda) (Bx-Sy)", type => "word_0", modifier => "*0.0000305", unit => ""},
             {name => "Oxygen Sensor Current (Bx-Sy)", type => "signed_word_1", modifier => "*0.000122", unit => "A"}
@@ -1097,7 +1101,7 @@ sub OpenPort
 
 Returns 1 if the serial port and ELM module are working, 0 otherwise.
 
-$obd->PortOK();
+	$obd->PortOK();
 =cut
 
 sub PortOK
@@ -1229,7 +1233,7 @@ sub ProcessAvailableCommands
 
 Displays the list of parameters that can be read from the ELM/ECU.
 
-$obd->ShowReadableParameters();
+	$obd->ShowReadableParameters();
 =cut
 
 sub ShowReadableParameters
@@ -1368,7 +1372,7 @@ followed by the value and the name of any unit associated with the value.
 
 If an error occurred, a message will be displayed instead.
 
-$obd->Show($value_name);
+	$obd->Show($value_name);
 
 This function calls the 'Read' function.
 =cut
@@ -1407,15 +1411,15 @@ When passed the name of an OBD value (e.g. "Engine RPM") in $value_name,
 it returns a reference to a structure containing a status flag and any
 responses:
 
-my $response = $obd->Read($value_name);
+	my $response = $obd->Read($value_name);
 
-if ($response->{'status'} == 0)
-{
-  foreach my $result (@{$response->{'results'}})
-  {
-    print "$result->{'address'} - $result->{'name'}: $result->{'value'} $result->{'unit'}\n"
-  }
-}
+	if ($response->{'status'} == 0)
+	{
+		foreach my $result (@{$response->{'results'}})
+		{
+			print "$result->{'address'} - $result->{'name'}: $result->{'value'} $result->{'unit'}\n"
+		}
+	}
 
 In the example above, $result->{'address'} contains the address of the
 ECU which returned the value, $result->{'name'} contains the name of
@@ -1955,7 +1959,7 @@ sub GetResult
 
 Display any trouble codes on the console:
 
-$obd->ShowTroubleCodes();
+	$obd->ShowTroubleCodes();
 =cut
 
 sub ShowTroubleCodes
@@ -2055,7 +2059,7 @@ sub DisplayTroubleCodes
 
 Clear any Trouble Codes and sensor data:
 
-$obd->ClearTroubleCodes();
+	$obd->ClearTroubleCodes();
 
 Note that clearing the sensor data will cause the vehicle to run on
 default values until it has recalibrated itself. This may affect
@@ -2085,10 +2089,11 @@ sub ClearTroubleCodes
 
 Returns a string containing the Vehicle Identification Number (VIN)
 
-my $vin = $obd->GetVIN();
+	my $vin = $obd->GetVIN();
 
 This value can also be obtained using the Show and Read commands:
-$obd->Show("Vehicle Identification Number");
+
+	$obd->Show("Vehicle Identification Number");
 =cut
 
 sub GetVIN
@@ -2112,10 +2117,11 @@ sub GetVIN
 Returns a string containing the type of the ELM module, e.g.:
 "ELM327 v1.3a"
 
-my $elm = $obd->GetELM();
+	my $elm = $obd->GetELM();
 
 This value can also be obtained using the Show and Read commands:
-$obd->Read("ELM identity");
+
+	$obd->Read("ELM identity");
 =cut
 
 sub GetELM
@@ -2136,10 +2142,11 @@ sub GetELM
 Returns a string containing the Voltage measured by the ELM module 
 (e.g. "13.9V"):
 
-my $Voltage = $obd->GetVoltage();
+	my $Voltage = $obd->GetVoltage();
 
-The number and unit can be obtained separately by calling: 
-my $response = $obd->read("Input Voltage");
+The number and unit can be obtained separately by calling:
+
+	my $response = $obd->read("Input Voltage");
 =cut
 
 sub GetVoltage
@@ -2161,7 +2168,7 @@ Changes the calibration value used by the ELM module. The value
 $Voltage is a string containing a fixed point value of the form:
 xx.xx, e.g "11.99", "12.01" etc.
 
-$obd->CalibrateVoltage($Voltage);
+	$obd->CalibrateVoltage($Voltage);
 =cut
 
 sub CalibrateVoltage
@@ -2181,7 +2188,7 @@ sub CalibrateVoltage
 
 Resets the ELM module's Voltage calibration to the factory setting:
 
-$obd->ResetVoltage();
+	$obd->ResetVoltage();
 =cut
 
 sub ResetVoltage
@@ -2217,10 +2224,11 @@ sub GetIgnition
 Returns the value previously stored in the ELM module's non-volatile
 storage area:
 
-my $byte_value = $obd->WriteStoredDataByte();
+	my $byte_value = $obd->WriteStoredDataByte();
 
 This value can also be read using:
-$obd->Read("Stored data byte");
+
+	$obd->Read("Stored data byte");
 =cut
 
 sub GetStoredDataByte
@@ -2240,7 +2248,7 @@ sub GetStoredDataByte
 
 Writes $byte_data to the ELM module's non-volatile storage area.
 
-$obd->WriteStoredDataByte($byte_value);
+	$obd->WriteStoredDataByte($byte_value);
 =cut
 
 sub WriteStoredDataByte
@@ -2274,7 +2282,7 @@ e.g. perl myOBD.pl&>trace.txt
 
 You can find documentation for this module with the perldoc command.
 
-    perldoc Device::ELM327
+	perldoc Device::ELM327
 
 
 You can also look for information at:
