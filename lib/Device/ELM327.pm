@@ -31,15 +31,15 @@ BEGIN
 
 =head1 NAME
 
-Device::ELM327 - Methods for reading ODB data with an ELM327 module.
+Device::ELM327 - Methods for reading OBD data with an ELM327 module.
 
 =head1 VERSION
 
-Version 0.02
+Version 0.03
 
 =cut
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 #*****************************************************************
 
@@ -47,13 +47,13 @@ our $VERSION = '0.02';
 
 This module provides a Perl interface to a device containing an Elm Electronics ELM327 OBD Interpreter and provides access to the following functions:
 
-Read OBD parameters and extract individual values from results
-Read OBD Trouble Codes and expand them to their full form
-Reset OBD Trouble Codes
-Read ELM327 parameters
-Write and write the ELM327 data byte
-Calibrate ELM327 Voltage
-Switchable diagnostic trace and replay function for debugging
+	Read OBD parameters and extract individual values from results.
+	Read OBD Trouble Codes and expand them to their full form.
+	Reset OBD Trouble Codes.
+	Read ELM327 parameters.
+	Write and write the ELM327 data byte.
+	Calibrate ELM327 Voltage.
+	Switchable diagnostic trace and replay function for debugging.
 
 The module is written entirely in Perl and works with both Linux and Windows. Depending on which operating system it is run on it uses either the Win32::SerialPort or Device::SerialPort module so it should work on any platform that supports one of them.
 
@@ -73,8 +73,7 @@ The module is written entirely in Perl and works with both Linux and Windows. De
 =head1 SUBROUTINES/METHODS
 
 
-=head2 new
-This is the constructor for the module.
+=head2 new - the constructor for the module.
 
 To open the device and have it search for an ELM module:
 
@@ -93,22 +92,26 @@ information being displayed as the number increases:
 
 A value of either undef or "" can be passed for the $port_name:
 
-	my $obd = Device::ELM327->new(undef, $debug_level);
+	my $obd = Device::ELM327->new("", $debug_level);
 
-The module can replay captured debugging information (previously
-produced by setting $debug_level to 1 or higher and piping the output
-to a text file: perl test.pl&>test_output.txt). To do this, pass
-the path and name of the file containing the debugging information
-as $replay_filename:
+The module can replay previously captured debugging information:
 
 	my $obd = Device_ELM327->new(undef, $debug_level, $replay_filename);
+
+To produce a file containing replayable data simply set $debug_level to
+1 or higher and pipe the output to a text file:
+
+	perl test.pl>test_output.txt
+
 =cut
 
 sub new
 {
 	my ($class, $port_name, $debug_level, $replay_filename) = @_;
 	my $self = bless { }, $class;
-  
+
+	$self->{'version'} = $VERSION;
+
 	$self->{'debug_level'} = 0;
 	if (defined($debug_level))
 	{
@@ -166,9 +169,6 @@ sub new
             {name => "Bank 1 - Sensor 3", type => "bool_2", modifier => "&4", unit => ""},
             {name => "Bank 1 - Sensor 4", type => "bool_2", modifier => "&2", unit => ""},
             {name => "Bank 2 - Sensor 1 13", type => "bool_2", modifier => "&1", unit => ""},
-            {name => "Bank 2 - Sensor 1 1D", type => "bool_2", modifier => "&4", unit => ""},
-            {name => "Bank 2 - Sensor 2 1D", type => "bool_2", modifier => "&2", unit => ""},
-            {name => "Bank 3 - Sensor 1", type => "bool_2", modifier => "&1", unit => ""},
             
             {name => "Bank 2 - Sensor 2 13", type => "bool_3", modifier => "&128", unit => ""},
             {name => "Bank 2 - Sensor 3", type => "bool_3", modifier => "&64", unit => ""},
@@ -178,6 +178,9 @@ sub new
             {name => "Bank 4 - Sensor 2", type => "bool_3", modifier => "&32", unit => ""},
             {name => "OBD requirements to which vehicle is designed", type => "bool_3", modifier => "&16", unit => ""},
             {name => "Location of oxygen sensors 1D", type => "bool_3", modifier => "&8", unit => ""},
+            {name => "Bank 2 - Sensor 1 1D", type => "bool_2", modifier => "&4", unit => ""},
+            {name => "Bank 2 - Sensor 2 1D", type => "bool_2", modifier => "&2", unit => ""},
+            {name => "Bank 3 - Sensor 1", type => "bool_2", modifier => "&1", unit => ""},
             {name => "Auxiliary Input Status", type => "bool_3", modifier => "&4", unit => ""},
             {name => "Time Since Engine Start", type => "bool_3", modifier => "&2", unit => ""},
             {name => "01 PIDs supported (21-40)", type => "bool_3", modifier => "&1", unit => ""},
@@ -988,8 +991,8 @@ sub new
 	if (defined($replay_filename))
 	{
     $self->Replay($replay_filename);
-           
-#    $self->ShowReadableParameters();
+
+#    $self->ShowReadableValues();
 #print Dumper($self->{'get'});
 	}
   else
@@ -1099,7 +1102,7 @@ sub OpenPort
 
 =head2 PortOK
 
-Returns 1 if the serial port and ELM module are working, 0 otherwise.
+Returns 1 if the serial port and ELM module are working or 0 if no ELM device could be connected to.
 
 	$obd->PortOK();
 =cut
@@ -1212,13 +1215,24 @@ sub ProcessAvailableCommands
       {
         $next_command = $result->{'name'};
       }
-      elsif((substr($result->{'name'}, -2, 2) eq "13" || substr($result->{'name'}, -2, 2) eq "1D" ) && $result->{'value'} == 1)
+      elsif( $result->{'value'} == 1 &&
+						((substr($result->{'name'}, -2, 2) eq "13" && $self->{'get'}->{'Location of oxygen sensors 13'}->{'available'} == 1)
+					|| (substr($result->{'name'}, -2, 2) eq "1D" && $self->{'get'}->{'Location of oxygen sensors 1D'}->{'available'} == 1))
+					 )
       {
-        print "Old name: >$result->{'name'}<\n";
         my $new_name = substr($result->{'name'}, 0, length($result->{'name'})-3);
-        print "New name: >$new_name<\n";
+        
+				if ($self->{'debug_level'} > 2)
+				{
+					print "Old name: >$result->{'name'}<\n";
+					print "New name: >$new_name<\n";
+				}
+				
         $self->{'get'}->{$new_name} = delete($self->{'get'}->{$result->{'name'}});
-        print Dumper($self->{'get'}->{$new_name});
+				if ($self->{'debug_level'} > 3)
+				{
+					print Dumper($self->{'get'}->{$new_name});
+				}
       }
     }
   }
@@ -1229,14 +1243,14 @@ sub ProcessAvailableCommands
 
 #*****************************************************************
 
-=head2 ShowReadableParameters
+=head2 ShowReadableValues
 
-Displays the list of parameters that can be read from the ELM/ECU.
+Displays the list of values that can be read from the ELM/ECU.
 
-	$obd->ShowReadableParameters();
+	$obd->ShowReadableValues();
 =cut
 
-sub ShowReadableParameters
+sub ShowReadableValues
 {
 	my ($self) = @_;
 
@@ -2246,7 +2260,7 @@ sub GetStoredDataByte
 
 =head2 WriteStoredDataByte
 
-Writes $byte_data to the ELM module's non-volatile storage area.
+Writes $byte_value to the ELM module's non-volatile storage area.
 
 	$obd->WriteStoredDataByte($byte_value);
 =cut

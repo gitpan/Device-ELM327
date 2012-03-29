@@ -2,12 +2,15 @@ use strict;
 use warnings;
 use ExtUtils::MakeMaker;
 
+my $makemaker_version = $ExtUtils::MakeMaker::VERSION;
+$makemaker_version=~ s/_//;
+
 WriteMakefile(
     NAME                => 'Device::ELM327',
     AUTHOR              => q{Alister Perrott <aperrott@cpan.org>},
     VERSION_FROM        => 'lib/Device/ELM327.pm',
     ABSTRACT_FROM       => 'lib/Device/ELM327.pm',
-    ($ExtUtils::MakeMaker::VERSION ne 6.3002
+    ($makemaker_version >= 6.3002
       ? ('LICENSE'=> 'perl')
       : ()),
     PL_FILES            => {},

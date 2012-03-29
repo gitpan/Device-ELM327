@@ -1,6 +1,14 @@
 Revision history for Device-ELM327
 
-0.01    27 March 2012
-        First version, released on an unsuspecting world.
+0.01  27 March 2012
+      First version, released on an unsuspecting world.
+    
 0.02	28 March 2012
-		Improved POD formatting. Replaced UTF-8 characters with ASCII.
+      Improved POD formatting. Replaced UTF-8 characters with ASCII.
+    
+0.03  29 March 2012
+      Fixed typos in POD.
+      Renamed ShowReadbleParameters to ShowReadableValues.
+      Fixed problem in Makefile.PL with underscore character in
+      $ExtUtils::MakeMaker::VERSION. Used regex to strip it.
+
