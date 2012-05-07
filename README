@@ -1,14 +1,14 @@
-Device-ELM327 version 0.03
+Device-ELM327 version 0.04
 
 This module provides a Perl interface to a device containing an Elm Electronics ELM327 OBD Interpreter and provides access to the following functions:
 
-    Read OBD parameters and extract individual values from results
-    Read OBD Trouble Codes and expand them to their full form
-    Reset OBD Trouble Codes
-    Read ELM327 parameters
-    Write and write the ELM327 data byte
-    Calibrate ELM327 Voltage
-    Switchable diagnostic trace and replay function for debugging
+ Read OBD parameters and extract individual values from results
+ Read OBD Trouble Codes and expand them to their full form
+ Reset OBD Trouble Codes
+ Read ELM327 parameters
+ Write and write the ELM327 data byte
+ Calibrate ELM327 Voltage
+ Switchable diagnostic trace and replay function for debugging
 
 The module is written entirely in Perl and works with both Linux and Windows. Depending on which operating system it is run on it uses either the Win32::SerialPort or Device::SerialPort module so it should work on any platform that supports one of them.
 

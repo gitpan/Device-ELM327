@@ -12,3 +12,9 @@ Revision history for Device-ELM327
       Fixed problem in Makefile.PL with underscore character in
       $ExtUtils::MakeMaker::VERSION. Used regex to strip it.
 
+0.04  7 May 2012
+      Added support for command 02 (freeze frame data).
+      Fixed bugs in command 05, but more work is required.
+      Added support for command 06 for CAN systems.
+      Tidied up FindAvailableCommands.
+      
