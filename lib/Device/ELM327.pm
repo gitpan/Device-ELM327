@@ -35,11 +35,11 @@ Device::ELM327 - Methods for reading OBD data with an ELM327 module.
 
 =head1 VERSION
 
-Version 0.04
+Version 0.05
 
 =cut
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 #*****************************************************************
 
@@ -1544,8 +1544,14 @@ sub new
             "Freeze frame Fuel Rail Pressure (absolute)" => { command => "02 59", result => [{type => "word_0", modifier => "*10", unit => "kPa"}] },
             "Freeze frame Relative Accelerator Pedal Position" => { command => "02 5A", result => [{type => "byte_0", modifier => "*100/255", unit => "%"}] },
 
-            
 
+            "Emission-related diagnostic trouble codes" => { command => "03", available => 1,
+            result => [
+            {name => "DTC#1", type => "word_0", modifier => "+0", unit => ""},
+            {name => "DTC#2", type => "word_1", modifier => "+0", unit => ""},
+            {name => "DTC#3", type => "word_2", modifier => "+0", unit => ""},
+            ] },
+            
             "05 TIDs supported (01-20)" => { command => "05 00",
             result => [
             {name => "Rich to lean sensor threshold voltage", type => "bool_0", modifier => "&128", unit => ""},
@@ -1585,16 +1591,52 @@ sub new
 #            {name => "05 TIDs supported (21-40)", type => "bool_3", modifier => "&1", unit => ""},
             ] },
             
-            "Rich to lean sensor threshold voltage" => { command => "05 01", result => [{type => "word_0", modifier => "*0.005", unit => "V"}] },
-            "Lean to rich sensor threshold voltage" => { command => "05 02", result => [{type => "word_0", modifier => "*0.005", unit => "V"}] },
-            "Low sensor voltage for switch time calculation" => { command => "05 03", result => [{type => "word_0", modifier => "*0.005", unit => "V"}] },
-            "High sensor voltage for switch time calculation" => { command => "05 04", result => [{type => "word_0", modifier => "*0.005", unit => "V"}] },
-            "Rich to lean sensor switch time" => { command => "05 05", result => [{type => "word_0", modifier => "*0.004", unit => "s"}] },
-            "Lean to rich sensor switch time" => { command => "05 06", result => [{type => "word_0", modifier => "*0.004", unit => "s"}] },
-            "Minimum sensor voltage for test cycle" => { command => "05 07", result => [{type => "word_0", modifier => "*0.005", unit => "V"}] },
-            "Maximum sensor voltage for test cycle" => { command => "05 08", result => [{type => "word_0", modifier => "*0.005", unit => "V"}] },
-            "Time between sensor transitions" => { command => "05 09", result => [{type => "word_0", modifier => "*0.04", unit => "s"}] },
-            "Sensor period" => { command => "05 0A", result => [{type => "word_0", modifier => "*0.04", unit => "s"}] },
+            "Rich to lean sensor threshold voltage" => { command => "05 01", result => [{type => "byte_0", modifier => "*0.005", unit => "V"}] },
+            "Lean to rich sensor threshold voltage" => { command => "05 02", result => [{type => "byte_0", modifier => "*0.005", unit => "V"}] },
+            "Low sensor voltage for switch time calculation" => { command => "05 03", result => [{type => "byte_0", modifier => "*0.005", unit => "V"}] },
+            "High sensor voltage for switch time calculation" => { command => "05 04", result => [{type => "byte_0", modifier => "*0.005", unit => "V"}] },
+
+            "Rich to lean sensor switch time" => { command => "05 05",
+            result => [
+            {type => "byte_0", modifier => "*0.004", unit => "s"},
+            {name => "Rich to lean sensor switch time - low limit", type => "byte_1", modifier => "*0.004", unit => "s"},
+            {name => "Rich to lean sensor switch time - high limit", type => "byte_2", modifier => "*0.004", unit => "s"},
+            ] },
+            
+            "Lean to rich sensor switch time" => { command => "05 06",
+            result => [
+            {type => "byte_0", modifier => "*0.004", unit => "s"},
+            {name => "Lean to rich sensor switch time - low limit", type => "byte_1", modifier => "*0.004", unit => "s"},
+            {name => "Lean to rich sensor switch time - high limit", type => "byte_2", modifier => "*0.004", unit => "s"},
+            ] },
+            
+            "Minimum sensor voltage for test cycle" => { command => "05 07",
+            result => [
+            {type => "byte_0", modifier => "*0.005", unit => "V"},
+            {name => "Minimum sensor voltage for test cycle - low limit", type => "byte_1", modifier => "*0.005", unit => "V"},
+            {name => "Minimum sensor voltage for test cycle - high limit", type => "byte_2", modifier => "*0.005", unit => "V"},
+            ] },
+            
+            "Maximum sensor voltage for test cycle" => { command => "05 08",
+            result => [
+            {type => "byte_0", modifier => "*0.005", unit => "V"},
+            {name => "Maximum sensor voltage for test cycle - low limit", type => "byte_1", modifier => "*0.005", unit => "V"},
+            {name => "Maximum sensor voltage for test cycle - high limit", type => "byte_2", modifier => "*0.005", unit => "V"},
+            ] },
+            
+            "Time between sensor transitions" => { command => "05 09",
+            result => [
+            {type => "byte_0", modifier => "*0.04", unit => "s"},
+            {name => "Time between sensor transitions - low limit", type => "byte_1", modifier => "*0.04", unit => "s"},
+            {name => "Time between sensor transitions - high limit", type => "byte_2", modifier => "*0.04", unit => "s"},
+            ] },
+            
+            "Sensor period" => { command => "05 0A",
+            result => [
+            {type => "byte_0", modifier => "*0.04", unit => "s"},
+            {name => "Sensor period - low limit", type => "byte_1", modifier => "*0.04", unit => "s"},
+            {name => "Sensor period - high limit", type => "byte_2", modifier => "*0.04", unit => "s"},
+            ] },
 
 
             "06 MIDs supported (01-20)" => { command => "06 00",
@@ -2027,6 +2069,13 @@ sub new
             "Vehicle manufacturer defined OBDMID FF" => { command => "06 FF", result => [{type => "word_0", modifier => "*1", unit => ""}] },
                                                                          
 
+            "Emission-related diagnostic trouble codes detected during current or last completed driving cycle" => { command => "07", available => 1,
+            result => [
+            {name => "DTC#1", type => "word_0", modifier => "+0", unit => ""},
+            {name => "DTC#2", type => "word_1", modifier => "+0", unit => ""},
+            {name => "DTC#3", type => "word_2", modifier => "+0", unit => ""},
+						] },
+
 
             "09 PIDs supported (01-20)" => { command => "09 00", available => 1,
             result => [
@@ -2095,6 +2144,14 @@ sub new
             ] },
             "MessageCount ECUNAME" => { command => "09 09", result => [{type => "byte_0", modifier => "+0", unit => ""}] },
             "ECUNAME" => { command => "09 0A", result => [{type => "string_0", modifier => "", unit => ""}] },
+
+
+            "Permanent diagnostic trouble codes" => { command => "0A", available => 1,
+            result => [
+            {name => "DTC#1", type => "word_0", modifier => "+0", unit => ""},
+            {name => "DTC#2", type => "word_1", modifier => "+0", unit => ""},
+            {name => "DTC#3", type => "word_2", modifier => "+0", unit => ""},
+            ] },
             
             };
 
@@ -2739,7 +2796,15 @@ sub Read
 								}
 							}
 							if ($self->{'debug_level'} > 2) { print "$id, $value, $result->{'unit'}\n"; }
-							push @{$results->{'results'}},{name => $id, value => $value, unit => $result->{'unit'}, address => ${$self->{'command_addresses'}}[$iteration]};
+
+							if ($command eq "03" || $command eq "07" || $command eq "0A")
+							{
+								push @{$results->{'results'}},{name => $id, value_read => $value, value => $self->DecodeTroubleCode($value), unit => $result->{'unit'}, address => ${$self->{'command_addresses'}}[$iteration]};
+							}
+							else
+							{
+								push @{$results->{'results'}},{name => $id, value => $value, unit => $result->{'unit'}, address => ${$self->{'command_addresses'}}[$iteration]};
+							}
 							$iteration++;
 						}
 						$self->{'command_results'} = [];
@@ -2988,7 +3053,7 @@ sub DecodeResponse
 				}
 				elsif ($self->{'results'}->{$address}->{'command'} == 6)
 				{
-					$self->{'results'}->{$address}->{''} = hex(shift @line_parts);
+					$self->{'results'}->{$address}->{'Limit_type_and_component_id'} = hex(shift @line_parts);
 				}
         if (exists($self->{'results'}->{$address}->{'response_length'}))
         {
@@ -3021,6 +3086,7 @@ sub DecodeResponse
           {
             $self->{'results'}->{$address}->{'command'} = (hex(shift @line_parts));
           }
+
           if ($has_sub_command[$self->{'results'}->{$address}->{'command'}])
           {     
             $self->{'results'}->{$address}->{'sub_command'} = hex(shift @line_parts);
@@ -3028,13 +3094,6 @@ sub DecodeResponse
           else
           {
             $self->{'results'}->{$address}->{'sub_command'} = 0;
-            if ($self->{'results'}->{$address}->{'command'} == 3 ||
-                $self->{'results'}->{$address}->{'command'} == 7 ||
-                $self->{'results'}->{$address}->{'command'} == 10
-               )
-            {
-              $self->{'results'}->{$address}->{'number_of_DTCs'} = hex(shift @line_parts);
-            }
           }
           if ($self->{'results'}->{$address}->{'command'} == 2)
           {
@@ -3264,7 +3323,7 @@ sub ShowTroubleCodes
    
   if ($number_of_codes > 0)
   {
-    $self->DisplayTroubleCodes();
+    $self->DisplayTroubleCodes("03");
   }
   else
   {
@@ -3280,19 +3339,14 @@ sub ShowTroubleCodes
 
 sub DisplayTroubleCodes
 {
-	my ($self) = @_;
+	my ($self, $command) = @_;
 
-  my @codes = ("P0","P1","P2","P3","C0","C1","C2","C3","B0","B1","B2","B3","U0","U1","U2","U3");
-
-  my $code_prefix_mask = 61440;
-  my $code_mask = 4095;
-  my $number_of_codes_mask = 127;
   my $result = 0;
   $self->{'trouble_codes'} = [];
 
-  if ($self->{'debug_level'} > 0) { print "~DisplayTroubleCodes\n"; }
+  if ($self->{'debug_level'} > 0) { print "~DisplayTroubleCodes $command\n"; }
 
-  $self->Command("03");  # Get trouble codes
+  $self->Command($command);  # Get trouble codes
   
   foreach my $address (sort keys %{$self->{'results'}})
   {
@@ -3325,18 +3379,41 @@ sub DisplayTroubleCodes
   
   foreach my $code (@{$self->{'command_results'}})
   {
-    my $code_prefix = ($code & $code_prefix_mask) >> 12;
-    $code &= $code_mask;
-    $code = sprintf("%03X", $code);
-    my $decoded_code = "$codes[$code_prefix]$code";
+    my $decoded_code = DecodeTroubleCode($code);
     push @{$self->{'trouble_codes'}} , $decoded_code;
-          
-    if ($self->{'debug_level'} > 1)
-    {
-      print "Code prefix: $code_prefix, Code: $code, Decoded: $decoded_code\n";
-    }
   }
 }
+
+
+#*****************************************************************
+
+sub DecodeTroubleCode
+{
+	my ($self, $code) = @_;
+
+  my @codes = ("P0","P1","P2","P3","C0","C1","C2","C3","B0","B1","B2","B3","U0","U1","U2","U3");
+
+  my $code_prefix_mask = 61440;
+  my $code_mask = 4095;
+  my $number_of_codes_mask = 127;
+
+	if ($code == 0)
+	{
+		return "No Trouble Code";
+	}
+
+  my $code_prefix = ($code & $code_prefix_mask) >> 12;
+  $code &= $code_mask;
+  $code = sprintf("%03X", $code);
+  my $decoded_code = "$codes[$code_prefix]$code";
+
+  if ($self->{'debug_level'} > 1)
+  {
+    print "Code prefix: $code_prefix, Code: $code, Decoded: $decoded_code\n";
+  }
+	return $decoded_code
+}
+
 
 #*****************************************************************
 

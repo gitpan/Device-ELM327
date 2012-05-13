@@ -18,3 +18,6 @@ Revision history for Device-ELM327
       Added support for command 06 for CAN systems.
       Tidied up FindAvailableCommands.
       
+0.05  13 May 2012
+      Added low level support for commands 03, 07 and 0A.
+      Command 05 now displays the correct result and limit values.
