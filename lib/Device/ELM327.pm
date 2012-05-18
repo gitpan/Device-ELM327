@@ -35,11 +35,11 @@ Device::ELM327 - Methods for reading OBD data with an ELM327 module.
 
 =head1 VERSION
 
-Version 0.05
+Version 0.06
 
 =cut
 
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 #*****************************************************************
 
@@ -55,7 +55,7 @@ This module provides a Perl interface to a device containing an Elm Electronics 
  Calibrate ELM327 Voltage.
  Switchable diagnostic trace and replay function for debugging.
 
-The module is written entirely in Perl and works with both Linux and Windows. Depending on which operating system it is run on it uses either the Win32::SerialPort or Device::SerialPort module so it should work on any platform that supports one of them.
+The module is written entirely in Perl and works with both Linux and Windows. Depending on which operating system it is run on it uses either the Win32::SerialPort or Device::SerialPort module (which you'll need to install first) so it should work on any platform that supports one of them.
 
  use Device::ELM327;
 
@@ -68,7 +68,6 @@ The module is written entirely in Perl and works with both Linux and Windows. De
   $obd->ShowTroubleCodes();
 
   undef $obd;
-
 
 =head1 SUBROUTINES/METHODS
 
@@ -2696,7 +2695,11 @@ sub Read
 				return $results;
 			}
 
-			if (substr($command, 0, 2) eq "06" && substr($command, 0, 5) ne "06 00" && $self->{'bus_type'} eq "CAN") # Command 6 works differently from 1,2,5,9 etc.
+			if (substr($command, 0, 2) eq "06" && substr($command, 0, 5) ne "06 00"
+					&& substr($command, 0, 5) ne "06 20" && substr($command, 0, 5) ne "06 40"
+					&& substr($command, 0, 5) ne "06 60" && substr($command, 0, 5) ne "06 80"
+					&& substr($command, 0, 5) ne "06 A0" && substr($command, 0, 5) ne "06 C0"
+			    && substr($command, 0, 5) ne "06 E0" && $self->{'bus_type'} eq "CAN") # Command 6 works differently from 1,2,5,9 etc.
 			{
 				$self->GetResultsCommand06_CAN(\$results);
 			}
@@ -2748,50 +2751,53 @@ sub Read
 						foreach $value (@{$self->{'command_results'}})
 						{
 							if ($self->{'debug_level'} > 2) { print "Raw value: $value\n"; }
-							
-							if ($type[$index] eq "byte" && $type[0] eq "signed")
-							{
-								my $byte_sign_mask = 128;
-								my $byte_value_mask = 127;
-								
-								$value = ($value & $byte_value_mask) - ($value & $byte_sign_mask);  	
-							}
-							elsif ($type[$index] eq "word" && $type[0] eq "signed")
-							{
-								my $word_sign_mask = 32768;
-								my $word_value_mask = 32767;
-								
-								$value = ($value & $word_value_mask) - ($value & $word_sign_mask);  	
-							}
-							
-							if ($type[$index] ne "string")
-							{
-								if ($self->{'debug_level'} > 2) { print "$value $result->{'modifier'}\n"; }
-								$value = eval( "$value $result->{'modifier'}" );
-								if ($self->{'debug_level'} > 2) { print "$value\n"; }
-								
-							}
-							else
-							{
-								my $statement = '$value' . $result->{'modifier'};
-								eval( $statement ); # Allow the use of a regex if required
-								if ($self->{'debug_level'} > 2) { print "Statement: $statement\n"; }
-								
-							}
-							
-							if ($type[$index] eq "bool")
-							{
-								if ($value != 0) { $value = 1; }			
-							}
 
-							if (exists($result->{'alternatives'}))
+							if ($value ne "no result")
 							{
-								foreach my $alternative (@{$result->{'alternatives'}})
+								if ($type[$index] eq "byte" && $type[0] eq "signed")
 								{
-									if ($alternative->{'value'} == $value)
+									my $byte_sign_mask = 128;
+									my $byte_value_mask = 127;
+									
+									$value = ($value & $byte_value_mask) - ($value & $byte_sign_mask);  	
+								}
+								elsif ($type[$index] eq "word" && $type[0] eq "signed")
+								{
+									my $word_sign_mask = 32768;
+									my $word_value_mask = 32767;
+									
+									$value = ($value & $word_value_mask) - ($value & $word_sign_mask);  	
+								}
+								
+								if ($type[$index] ne "string")
+								{
+									if ($self->{'debug_level'} > 2) { print "$value $result->{'modifier'}\n"; }
+									$value = eval( "$value $result->{'modifier'}" );
+									if ($self->{'debug_level'} > 2) { print "$value\n"; }
+									
+								}
+								else
+								{
+									my $statement = '$value' . $result->{'modifier'};
+									eval( $statement ); # Allow the use of a regex if required
+									if ($self->{'debug_level'} > 2) { print "Statement: $statement\n"; }
+									
+								}
+								
+								if ($type[$index] eq "bool")
+								{
+									if ($value != 0) { $value = 1; }			
+								}
+
+								if (exists($result->{'alternatives'}))
+								{
+									foreach my $alternative (@{$result->{'alternatives'}})
 									{
-										$value = $alternative->{'meaning'};
-										last;
+										if ($alternative->{'value'} == $value)
+										{
+											$value = $alternative->{'meaning'};
+											last;
+										}
 									}
 								}
 							}
@@ -3074,7 +3080,7 @@ sub DecodeResponse
         {
           if ($line_number < 16)
           {
-            $self->{'results'}->{$address}->{'response_length'} = $line_number;
+            $self->{'results'}->{$address}->{'response_length'} = $line_number - 2; # Do not include command and sub-command bytes
           }
           else
           {
@@ -3164,55 +3170,91 @@ sub GetResult
 
   foreach my $address (sort keys %{$self->{'results'}})
   {
+		my $number_of_result_bytes = $self->{'results'}->{$address}->{'response_length'};
     if ($self->{'results'}->{$address}->{'command'} == $self->{'last_command'} && 
     $self->{'results'}->{$address}->{'sub_command'} == $self->{'last_sub_command'})
     {
       if ($type eq "bool")
       {
-        $result = ${$self->{'results'}->{$address}->{'result'}}[$number];
+				if ($number_of_result_bytes < ($number+1))
+				{
+					$result = "no result";
+				}
+				else
+				{
+					$result = ${$self->{'results'}->{$address}->{'result'}}[$number];
+				}
         push @{$self->{'command_addresses'}}, $address;
         push @{$self->{'command_results'}}, $result;
         $self->{'number_of_results'}++;
       }
       elsif ($type eq "byte")
       {
-        $result = ${$self->{'results'}->{$address}->{'result'}}[$number];
+				if ($number_of_result_bytes < ($number+1))
+				{
+					$result = "no result";
+				}
+				else
+				{
+					$result = ${$self->{'results'}->{$address}->{'result'}}[$number];
+				}
         push @{$self->{'command_addresses'}}, $address;
         push @{$self->{'command_results'}}, $result;
         $self->{'number_of_results'}++;
       }
       elsif ($type eq "word")
       {
-        $result = ((${$self->{'results'}->{$address}->{'result'}}[$number*2] * 256) + ${$self->{'results'}->{$address}->{'result'}}[($number*2)+1] );
-        push @{$self->{'command_addresses'}}, $address;
-        push @{$self->{'command_results'}}, $result;
-        $self->{'number_of_results'}++;
+				if ($number_of_result_bytes < (($number*2)+2))
+				{
+					$result = "no result";
+				}
+				else
+				{
+					$result = ((${$self->{'results'}->{$address}->{'result'}}[$number*2] * 256) + ${$self->{'results'}->{$address}->{'result'}}[($number*2)+1] );
+				}
+				push @{$self->{'command_addresses'}}, $address;
+				push @{$self->{'command_results'}}, $result;
+				$self->{'number_of_results'}++;
       }
       elsif ($type eq "dword")
       {
-        $result = ((${$self->{'results'}->{$address}->{'result'}}[$number*4] * 16777216) + ${$self->{'results'}->{$address}->{'result'}}[($number*4)+1] * 65536);
-        $result += ((${$self->{'results'}->{$address}->{'result'}}[($number*4)+2] * 256) + ${$self->{'results'}->{$address}->{'result'}}[($number*4)+3] );
+				if ($number_of_result_bytes < (($number*4)+4))
+				{
+					$result = "no result";
+				}
+				else
+				{
+					$result = ((${$self->{'results'}->{$address}->{'result'}}[$number*4] * 16777216) + ${$self->{'results'}->{$address}->{'result'}}[($number*4)+1] * 65536);
+					$result += ((${$self->{'results'}->{$address}->{'result'}}[($number*4)+2] * 256) + ${$self->{'results'}->{$address}->{'result'}}[($number*4)+3] );
+				}
         push @{$self->{'command_addresses'}}, $address;
         push @{$self->{'command_results'}}, $result;
         $self->{'number_of_results'}++;
       }
       elsif ($type eq "string")
       {
-        $result = "";
-        foreach (@{$self->{'results'}->{$address}->{'result'}})
-        {
-          if ($number > 0)
-          {
-            $number--;
-          }
-          else
-          {
-            if ($_ > 32 && $_ < 127)  # Ignore non-printable characters
-            {
-              $result .= chr($_);
-            }
-          }
-        }
+				if ($number_of_result_bytes < $number)
+				{
+					$result = "no result";
+				}
+				else
+				{
+					$result = "";
+					foreach (@{$self->{'results'}->{$address}->{'result'}})
+					{
+						if ($number > 0)
+						{
+							$number--;
+						}
+						else
+						{
+							if ($_ > 32 && $_ < 127)  # Ignore non-printable characters
+							{
+								$result .= chr($_);
+							}
+						}
+					}
+				}
         push @{$self->{'command_addresses'}}, $address;
         push @{$self->{'command_results'}}, $result;
         $self->{'number_of_results'}++;
@@ -3238,24 +3280,29 @@ sub GetResultsCommand06_CAN
 
   foreach my $address (sort keys %{$self->{'results'}})
   {
-		my $index = 1;
-		my $number_of_bytes = scalar(@{$self->{'results'}->{$address}->{'result'}});
+		my $index = 0;#1;
+		my $number_of_header_bytes = 2; # Allow for TID and OBDMIDID
+		my $number_of_result_bytes = $self->{'results'}->{$address}->{'response_length'} - $number_of_header_bytes;
 		do
 		{
-			my $obdmid_id = ${$self->{'results'}->{$address}->{'result'}}[$index];
-			my $sdt_id = ${$self->{'results'}->{$address}->{'result'}}[$index+1];
-			my $uas_id = ${$self->{'results'}->{$address}->{'result'}}[$index+2];
+			if ($index != 0)
+			{
+				$index++;	# Skip over OBDMIDID in subsequent records.
+			}
+#			my $obdmid_id = ${$self->{'results'}->{$address}->{'result'}}[$index];
+			my $sdt_id = ${$self->{'results'}->{$address}->{'result'}}[$index];
+			my $uas_id = ${$self->{'results'}->{$address}->{'result'}}[$index+1];
 
-			my $test_value = ${$self->{'results'}->{$address}->{'result'}}[$index+3] * 256;
-			$test_value += ${$self->{'results'}->{$address}->{'result'}}[$index+4];
+			my $test_value = ${$self->{'results'}->{$address}->{'result'}}[$index+2] * 256;
+			$test_value += ${$self->{'results'}->{$address}->{'result'}}[$index+3];
 
-			my $min_test_limit = ${$self->{'results'}->{$address}->{'result'}}[$index+5] * 256;
-			$min_test_limit += ${$self->{'results'}->{$address}->{'result'}}[$index+6];
+			my $min_test_limit = ${$self->{'results'}->{$address}->{'result'}}[$index+4] * 256;
+			$min_test_limit += ${$self->{'results'}->{$address}->{'result'}}[$index+5];
 
-			my $max_test_limit = ${$self->{'results'}->{$address}->{'result'}}[$index+7] * 256;
-			$max_test_limit += ${$self->{'results'}->{$address}->{'result'}}[$index+8];
+			my $max_test_limit = ${$self->{'results'}->{$address}->{'result'}}[$index+6] * 256;
+			$max_test_limit += ${$self->{'results'}->{$address}->{'result'}}[$index+7];
 
-			my $test_name = "Unrecognised test Id";
+			my $test_name = "Unrecognised test Id ($sdt_id)";
 
 			if (exists($self->{'Standardized_Test_IDs'}->{$sdt_id}))
 			{
@@ -3285,8 +3332,8 @@ sub GetResultsCommand06_CAN
 			
 			push @{$results->{'results'}},{address => $address, name => $test_name, value => $test_value, max_limit => $max_test_limit, min_limit => $min_test_limit, unit => $unit};
 
-			$index += 9;
-		} while($index < $number_of_bytes);
+			$index += 8;
+		} while(($index+8) < $number_of_result_bytes);
 	}
 
 	if ($self->{'debug_level'} > 2)
@@ -3397,7 +3444,7 @@ sub DecodeTroubleCode
   my $code_mask = 4095;
   my $number_of_codes_mask = 127;
 
-	if ($code == 0)
+	if ($code eq "no result" || $code == 0)
 	{
 		return "No Trouble Code";
 	}
@@ -3447,83 +3494,6 @@ sub ClearTroubleCodes
 
 #*****************************************************************
 
-=head2 GetVIN
-
-Returns a string containing the Vehicle Identification Number (VIN)
-
- my $vin = $obd->GetVIN();
-
-This value can also be obtained using the Show and Read commands:
-
- $obd->Show("Vehicle Identification Number");
-=cut
-
-sub GetVIN
-{
-	my ($self) = @_;
-  
-  if ($self->{'debug_level'} > 0) { print "~GetVIN:\n"; }
-
-  $self->Command("09 02");  # Get VIN
-
-  my $vin = $self->GetResult("string", 1);
-
-  return $vin;
-}
-
-
-#*****************************************************************
-
-=head2 GetELM
-
-Returns a string containing the type of the ELM module, e.g.:
-"ELM327 v1.3a"
-
- my $elm = $obd->GetELM();
-
-This value can also be obtained using the Show and Read commands:
-
- $obd->Read("ELM identity");
-=cut
-
-sub GetELM
-{
-	my ($self) = @_;
-
-  if ($self->{'debug_level'} > 0) { print "~GetELM:\n"; }
-
-  $self->Command("AT I");  # Read Identity
-  return ${$self->{'response'}}[0];
-}
-
-
-#*****************************************************************
-
-=head2 GetVoltage
-
-Returns a string containing the Voltage measured by the ELM module 
-(e.g. "13.9V"):
-
- my $Voltage = $obd->GetVoltage();
-
-The number and unit can be obtained separately by calling:
-
- my $response = $obd->read("Input Voltage");
-=cut
-
-sub GetVoltage
-{
-	my ($self) = @_;
-
-  if ($self->{'debug_level'} > 0) { print "~GetVoltage:\n"; }
-  
-  $self->Command("AT RV");  # Read Voltage
-  return ${$self->{'response'}}[0];
-}
-
-
-#*****************************************************************
-
 =head2 CalibrateVoltage
 
 Changes the calibration value used by the ELM module. The value
@@ -3531,6 +3501,11 @@ $Voltage is a string containing a fixed point value of the form:
 xx.xx, e.g "11.99", "12.01" etc.
 
  $obd->CalibrateVoltage($Voltage);
+
+The Voltage can be read by calling:
+
+ my $response = $obd->read("Input Voltage");
+ 
 =cut
 
 sub CalibrateVoltage
@@ -3566,51 +3541,16 @@ sub ResetVoltage
 
 #*****************************************************************
 
-# Returns ignition state (ON or OFF)
-
-sub GetIgnition
-{
-	my ($self) = @_;
-
-  if ($self->{'debug_level'} > 0) { print "~GetIgnition:\n"; }
-  
-  $self->Command("AT IGN");  # Read ignition state (ON or OFF)
-  return ${$self->{'response'}}[0];
-}
-
-
-#*****************************************************************
-
-=head2 GetStoredDataByte
-
-Returns the value previously stored in the ELM module's non-volatile
-storage area:
-
- my $byte_value = $obd->WriteStoredDataByte();
-
-This value can also be read using:
-
- $obd->Read("Stored data byte");
-=cut
-
-sub GetStoredDataByte
-{
-	my ($self) = @_;
-
-  if ($self->{'debug_level'} > 0) { print "~GetStoredDataByte:\n"; }
-  
-  $self->Command("AT RD");  # Read the stored data
-  return ${$self->{'response'}}[0];
-}
-
-
-#*****************************************************************
-
 =head2 WriteStoredDataByte
 
 Writes $byte_value to the ELM module's non-volatile storage area.
 
  $obd->WriteStoredDataByte($byte_value);
+
+The value of this byte can be read using:
+
+ $obd->Read("Stored data byte");
+ 
 =cut
 
 sub WriteStoredDataByte

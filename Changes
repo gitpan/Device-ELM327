@@ -21,3 +21,8 @@ Revision history for Device-ELM327
 0.05  13 May 2012
       Added low level support for commands 03, 07 and 0A.
       Command 05 now displays the correct result and limit values.
+
+0.06  18 May 2012
+      Improved error handling for GetResult.
+      Fixed a bug in the command 06 code.
+      Removed obsolete commands.
