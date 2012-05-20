@@ -26,3 +26,7 @@ Revision history for Device-ELM327
       Improved error handling for GetResult.
       Fixed a bug in the command 06 code.
       Removed obsolete commands.
+
+0.07  20 May 2012
+      Added conditional serial module name to PREREQ_PM in Makefile.PL.
+      Added text to explain boolean results.

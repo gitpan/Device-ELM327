@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Device-ELM327
-version:            0.06
+version:            0.07
 abstract:           Methods for reading OBD data with an ELM327 module.
 author:
     - Alister Perrott <aperrott@cpan.org>
@@ -11,7 +11,8 @@ configure_requires:
 build_requires:
     ExtUtils::MakeMaker:  0
 requires:
-    Test::More:  0
+    Device::SerialPort:  0
+    Test::More:          0
 no_index:
     directory:
         - t
