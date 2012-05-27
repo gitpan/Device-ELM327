@@ -9,10 +9,7 @@ my $null = "\x0";
 my $lf = "\xa";
 my $cr = "\xd";
 
-my $on = 1;
-my $off = 0;
-
-my $max_ports_to_search = 32;
+my $max_ports_to_search = 64;
 
 my @has_sub_command = (0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0);
 
@@ -35,11 +32,11 @@ Device::ELM327 - Methods for reading OBD data with an ELM327 module.
 
 =head1 VERSION
 
-Version 0.07
+Version 0.08
 
 =cut
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 
 #*****************************************************************
 
@@ -133,6 +130,19 @@ sub new
 	$self->{'command_results'} = [];
 
 	$self->{'trouble_codes'} = [];
+
+	# Status codes
+	$self->{'status_meanings'} = {
+						"ok"			 							=> "No errors detected",
+						"Zero length response" 	=> "No data was returned by the ECU",
+						"NO DATA" 							=> "A 'NO DATA' response was returned by the ELM",
+						"STOPPED" 							=> "A 'STOPPED' response was returned by the ELM",
+						"Port not ok"						=> "The connection to the ELM module failed",
+						"Negative response"			=> "The vehicle returned a negative response",
+						"Unsupported name"			=> "The vehicle does not support this value",
+						"Unrecognised name"			=> "ELM327.pm does not recognise this value",
+						};
+		
 
 	# ISO Standard Test Id's for use with function 6.
 	$self->{'Standardized_Test_IDs'} = {
@@ -2175,98 +2185,6 @@ sub new
 
 #*****************************************************************
 
-# Try to find an ELM module on a COM port.
-# If a $port_name is supplied, start with that one and work upwards.
-
-sub OpenPort
-{
-  my ($self, $port_name) = @_;
-  my $quiet = 0;
-  my $port = -1;
-  my $port_count = 0;
-
-  if (!defined($port_name) || $port_name eq "")
-  {
-    if ($^O eq "MSWin32")
-    {
-      $port_name = "COM1";
-    }
-    else
-    {
-      $port_name = "/dev/ttyUSB0";
-    }
-  }
-
- 	my $port_number = $port_name;
-	$port_number =~ s/[^0-9]//g;  # Strip everything that isn't numeric
-
-	my $port_text = $port_name;
-	$port_text =~ s/[0-9]//g;     # Strip everything that is numeric
-
-  do
-  {
-    $port_name = $port_text.$port_number;
-    
-    if ($^O eq "MSWin32")
-    {
-      $port = Win32::SerialPort->new ($port_name);
-    }
-    else
-    {
-      $port = Device::SerialPort->new($port_name, $quiet);
-    }
-
-    if (defined($port))
-    {
-      $port->user_msg(1); 	    # misc. warnings
-      $port->error_msg(1); 	    # hardware and data errors
-
-      $port->baudrate(38400);
-      $port->parity("none");
-      $port->parity_enable(0);  # for any parity except "none"
-      $port->databits(8);
-      $port->stopbits(1);
-      $port->handshake('none');
-
-      $port->write_settings;
-
-      $self->{'port'} = $port;
-      $self->Command("AT Z");   # Reset Device
-      foreach (@{$self->{'response'}})
-      {
-        if (substr($_, 0, 5) eq "ELM32")  # Allow 328 & 329 as well
-        {
-          $self->{'ELM_type'} = substr($_, 0, 6);
-        }
-      }
-      if ($self->{'ELM_type'} eq "NONE" && $self->{'debug_level'} > 0)
-      {
-        print "Can't find an ELM module on $port_name\n";
-      }
-    }
-    else
-    {
-      if ($self->{'debug_level'} > 0)
-      {
-        print "Can't open $port_name: $!\n";
-      }
-      $self->{'port'} = -1;
-    }
-
-    $port_number++;
-    $port_count++;
-  } until(($self->{'port'} != -1 && $self->{'ELM_type'} ne "NONE") || $port_count > $max_ports_to_search);
-
-  if ($self->{'ELM_type'} eq "NONE")
-  {
-    $self->{'port'} = -1;
-    die "Couldn't find an ELM module!\n"; 
-  }
-}
-
-
-#*****************************************************************
-
 =head2 PortOK
 
 Returns 1 if the serial port and ELM module are working or 0 if no ELM device could be connected to.
@@ -2287,134 +2205,6 @@ sub PortOK
   {
     return 1;
   }
-}
-
-
-#*****************************************************************
-
-# Set up the ELM module to return data in the required form
-
-sub ConfigureDevice
-{
-	my ($self) = @_;
-
-  if ($self->{'debug_level'} > 0) { print "ConfigureDevice\n"; }
-  
-  if ($self->PortOK)
-  {
-    $self->Command("AT E0");   # Turn echo off
-
-    $self->Command("AT L0");   # Turn linefeeds off
-
-    $self->Command("AT SP 0");  # Set Protocol to auto
-
-    $self->Command("AT DPN");  # Display Protocol number
-
-    $self->Command("AT DP");  # Display Protocol
-
-    $self->Command("AT H1");  # Turn headers on
-
-    $self->Command("01 00");  # Prepare to talk and get available PID's
-  }
-}
-
-
-#*****************************************************************
-
-# Query the ECU to find out which commands are supported and
-# annotate the value entries in the 'get' structure with the 
-# 'available' flag set to 0 (not supported) or 1 (supported).
-
-sub FindAvailableCommands
-{
-	my ($self) = @_;
-
-	my @commands = ( "01 PIDs supported (01-20)",
-	                 "02 PIDs supported (01-20)",
-	                 "09 PIDs supported (01-20)"
-	               );
-
-  if ($self->{'debug_level'} > 0) { print "FindAvailableCommands:\n"; }
-
-	if ($self->{'bus_type'} eq "CAN")
-	{
-		push @commands, "06 MIDs supported (01-20)";	# Command only supported by CAN systems
-	}
-	else
-	{
-		push @commands, "05 TIDs supported (01-20)";	# Command only supported by non-CAN systems
-#		push @commands, "06 TIDs supported (01-20)";	# Command only supported by non-CAN systems
-	}
-
-	foreach my $next_command (@commands)
-	{
-		do
-		{
-			$next_command = $self->ProcessAvailableCommands($next_command);
-		} while (defined($next_command));
-	}
-}
-
-
-#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-# Query the ECU to find out which commands are supported and
-# annotate the value entries in the 'get' structure with the 
-# 'available' flag set to 0 (not supported) or 1 (supported).
-
-sub ProcessAvailableCommands
-{
-	my ($self, $command) = @_;
-
-  my $next_command = undef;
-  
-  if ($self->{'debug_level'} > 0) { print "~ProcessAvailableCommands: $command\n"; }
-
-	$self->{'get'}->{$command}->{'available'} = 1;	# Flag the command as available
-	
-  my $response = $self->Read($command);
-
-  if ($self->{'debug_level'} > 1) { print "$command\n"; }
-
-  if ($response->{'status'} == 0)
-  {
-    foreach my $result (@{$response->{'results'}})
-    {
-      $self->{'get'}->{$result->{'name'}}->{'available'} = $result->{'value'};
-      if ($self->{'debug_level'} > 1) { print "$result->{'address'} - $result->{'name'}: $result->{'value'} $result->{'unit'}\n"; }
-
-      if (substr($result->{'name'}, 4, 15) eq "IDs supported (" && $result->{'value'} == 1)
-      {
-        $next_command = $result->{'name'};
-      }
-      elsif ( $result->{'value'} == 1 &&
-						((substr($result->{'name'}, -2, 2) eq "13" && $self->{'get'}->{'Location of oxygen sensors 13'}->{'available'} == 1)
-					|| (substr($result->{'name'}, -2, 2) eq "1D" && $self->{'get'}->{'Location of oxygen sensors 1D'}->{'available'} == 1))
-					  )
-      {
-        my $new_name = substr($result->{'name'}, 0, length($result->{'name'})-3);
-        
-				if ($self->{'debug_level'} > 2)
-				{
-					print "Old name: >$result->{'name'}<\n";
-					print "New name: >$new_name<\n";
-				}
-				
-        $self->{'get'}->{$new_name} = delete($self->{'get'}->{$result->{'name'}});
-				if ($self->{'debug_level'} > 3)
-				{
-					print Dumper($self->{'get'}->{$new_name});
-				}
-      }
-    }
-  }
-  else
-  {
-		# Flag command as unavailable
-		$self->{'get'}->{$command}->{'available'} = 0;
-	}
-
-  return $next_command;
 }
 
 
@@ -2467,94 +2257,6 @@ sub ShowReadableValues
 
 #*****************************************************************
 
-# Process a file containing debugging output and replay the commands
-# through the module.
-
-sub Replay
-{
-  my ($self, $replay_filename) = @_;
-  $self->{'replay_file'} = 1;
-  
-  my $status = 0;
-  my $replay_command="";
-
-  # Open the file containing the command and response data
-  open (REPLAYFILE, $replay_filename);
-
-  my $get_command = 0;
-  my $seek_response = 1;
-  my $read_response = 2;
-  my $get_result = 4;
-  
-  my $replay_state = $get_command; 
-
-  while (<REPLAYFILE>)
-  { 
-    # Iterate through issuing commands and parsing responses
-    $_ =~ s/\r?\n//g;   # Strip all carriage returns
-
-    if ($replay_state == $get_command)
-    {
-      if (substr($_, 0, 1) eq "~")
-      {
-        $_ = substr($_, 1);
-        my @linepart = split(":", $_);
-        foreach my $part (@linepart)
-        {
-          $part =~ s/^\s+|\s+$//g; # Strip unwanted whitespace
-        }
-
-        $replay_command = '$self->'.$linepart[0]."(\"";
-        my $number_of_parameters = scalar(@linepart);
-        for (my $index=1; $index<$number_of_parameters; $index++)
-        {
-          $replay_command .= $linepart[$index];
-          if ($index < ($number_of_parameters-1))
-          {
-            $replay_command .= ",";
-          } 
-        }				
-        $replay_command .= "\");";
-        
-        $replay_state = $seek_response;
-      }
-    }
-    elsif ($replay_state == $seek_response)
-    {
-      if ($_ eq "Response")
-      {
-        $replay_state = $read_response;
-      }
-    }
-    elsif ($replay_state == $read_response)
-    {
-      if ($_ eq "End of response")
-      {
-        # Execute the command we just got the response to...
-        $status = 0;
-        $status = eval($replay_command);
-        if ($self->{'debug_level'} > 1)
-        {
-          print "Status: $status\n";
-          print Dumper($status);
-        }
-        $replay_state = $get_command;
-      }
-      else
-      {
-        if (length($_) > 0)
-        {
-          push @{$self->{'replay_response'}}, $_;
-        }
-      }
-    }
-  }
-  close (REPLAYFILE);
-}
-
-
-#*****************************************************************
-
 =head2 Show
 
 When passed the name of an OBD value (e.g. "Engine RPM") in $value_name,
@@ -2578,7 +2280,7 @@ sub Show
 
   print "$name:\n";
 
-  if ($response->{'status'} == 0)
+  if ($response->{'status'} eq "ok")
   {
     foreach my $result (@{$response->{'results'}})
     {
@@ -2614,7 +2316,7 @@ responses:
 
  my $response = $obd->Read($value_name);
 
- if ($response->{'status'} == 0)
+ if ($response->{'status'} eq "ok")
  {
   foreach my $result (@{$response->{'results'}})
   {
@@ -2628,31 +2330,31 @@ the value which was read or the name of one of many parameters returned.
 $result->{'value'} and $result->{'unit'} contain the value and the name
 of any unit associated with the value.
 
-Error conditions are indicated by a non-zero value of $response->{'status'}
-and an error message in $response->{'status_message'} (the default is
-'ok' when there is no error).
+Error conditions are indicated by a value of $response->{'status'} other 
+than 'ok' and an expanded error message in $response->{'status_message'}
+(the default is 'No errors detected' when there is no error).
 
-Error code	Meaning
- 0					ok
--1					Unrecognised value (by module)
--2					No data returned for value (by ECU)
--3					Unsupported value (by ECU on this vehicle)
+Error									Meaning
+ok										No errors detected
+Zero length response	No data was returned by the ECU
+NO DATA								A 'NO DATA' response was returned by the ELM
+STOPPED								A 'STOPPED' response was returned by the ELM
+Port not ok						The connection to the ELM module failed
+Negative response			The vehicle returned a negative response
+Unsupported name			The vehicle does not support this value
+Unrecognised name			ELM327.pm does not recognise this value
 =cut
 
 sub Read
 {
 	my ($self, $name, $parameter) = @_;
 
-	my $status = 0;
 	my $unit = "";
 	
 	my $results=();
 	
 	my $id;
 	my $value;
-
-	$results->{'status'} = 0;
-	$results->{'status_message'} = "ok";
 
   if ($self->{'debug_level'} > 0) { print "~Read: $name\n"; }
 
@@ -2687,12 +2389,11 @@ sub Read
 				}
 			}
 
-			$status = $self->Command($command);
+			$results->{'status'} = $self->Command($command);
 
-			if ($status != 0)
+			if ($results->{'status'} ne "ok")
 			{
-				$results->{'status'} = -2; # No response
-				$results->{'status_message'} = "No data returned for: $name";
+				$results->{'status_message'} = $self->{'status_meanings'}->{$results->{'status'}};
 				return $results;
 			}
 
@@ -2831,34 +2532,218 @@ sub Read
 		else
 		{
 			if ($self->{'debug_level'} > 2) { print "Unsupported name: $name\n"; }
-			$results->{'status'} = -3;
-			$results->{'status_message'} = "Unsupported name: $name";
+			$results->{'status'} = "Unsupported name";
 		}
 	}
 	else
 	{
     if ($self->{'debug_level'} > 2) { print "Unrecognised name: $name\n"; }
-		$results->{'status'} = -1;
-		$results->{'status_message'} = "Unrecognised name: $name";
+		$results->{'status'} = "Unrecognised name";
 	}
-	
+
+	$results->{'status_message'} = $self->{'status_meanings'}->{$results->{'status'}};
   return $results;
 }
 
 
 #*****************************************************************
 
-# Send a command to the ELM, read any response and decode it if
-# was an ECU command.
-# AT command responses are placed in the $self->{'response'} array.
-# Responses to ECU commands are written to the $self->{'results'}
-# structure.
+=head2 ShowTroubleCodes
+
+Display any trouble codes on the console:
+
+ $obd->ShowTroubleCodes();
+=cut
+
+sub ShowTroubleCodes
+{
+	my ($self) = @_;
+
+  my $malfunction_indicator_lamp_mask = 128;
+  my $number_of_codes_mask = 127;
+
+  if ($self->{'debug_level'} > 0) { print "ShowTroubleCodes\n"; }
+
+  $self->Command("01 01");  # Get number of trouble codes
+
+  my $number_of_codes = $self->GetResult("byte");
+  my $malfunction_indicator_lamp_state = $number_of_codes & $malfunction_indicator_lamp_mask;
+  $number_of_codes &= $number_of_codes_mask;
+   
+  if ($number_of_codes > 0)
+  {
+    $self->Show("Emission-related diagnostic trouble codes");
+  }
+  else
+  {
+    print "No trouble codes found.\n";
+  }
+}
+
+
+#*****************************************************************
+
+=head2 ClearTroubleCodes
+
+Clear any Trouble Codes and sensor data:
+
+ $obd->ClearTroubleCodes();
+
+Note that clearing the sensor data will cause the vehicle to run on
+default values until it has recalibrated itself. This may affect
+performance and fuel economy.
+
+The ISO specification also insists that any user interface which
+invokes this function should display an "are you sure?" message
+to the user before calling it.
+
+=cut
+
+sub ClearTroubleCodes
+{
+	my ($self) = @_;
+
+  if ($self->{'debug_level'} > 0) { print "~ClearTroubleCodes\n"; }
+  $self->Command("04");  # Clear Trouble Codes and sensor data
+
+  my $result = $self->GetResult("byte");
+  return $result;  # Returns 0 if codes have been cleared or error code.
+}
+
+
+#*****************************************************************
+
+=head2 DecodeTroubleCode
+
+Expand a trouble code (e.g. 4216) to the full ISO code (C0216)
+
+This function is called by 'Read'.
+
+ $decoded_code = $obd->DecodeTroubleCode($code);
+=cut
+
+sub DecodeTroubleCode
+{
+	my ($self, $code) = @_;
+
+  my @codes = ("P0","P1","P2","P3","C0","C1","C2","C3","B0","B1","B2","B3","U0","U1","U2","U3");
+
+  my $code_prefix_mask = 61440;
+  my $code_mask = 4095;
+  my $number_of_codes_mask = 127;
+
+	if ($code eq "no result" || $code == 0)
+	{
+		return "No Trouble Code";
+	}
+
+  my $code_prefix = ($code & $code_prefix_mask) >> 12;
+  $code &= $code_mask;
+  $code = sprintf("%03X", $code);
+  my $decoded_code = "$codes[$code_prefix]$code";
+
+  if ($self->{'debug_level'} > 1)
+  {
+    print "Code prefix: $code_prefix, Code: $code, Decoded: $decoded_code\n";
+  }
+	return $decoded_code;
+}
+
+
+#*****************************************************************
+
+=head2 CalibrateVoltage
+
+Changes the calibration value used by the ELM module. The value
+$Voltage is a string containing a fixed point value of the form:
+xx.xx, e.g "11.99", "12.01" etc.
+
+ $obd->CalibrateVoltage($Voltage);
+
+The Voltage can be read by calling:
+
+ my $response = $obd->read("Input Voltage");
+ 
+=cut
+
+sub CalibrateVoltage
+{
+	my ($self, $Voltage) = @_;
+
+  if ($self->{'debug_level'} > 0) { print "~CalibrateVoltage: $Voltage\n"; }
+  
+  $self->Command("AT CV $Voltage");  # Calibrate Voltage
+  return ${$self->{'response'}}[0];
+}
+
+
+#*****************************************************************
+
+=head2 ResetVoltage
+
+Resets the ELM module's Voltage calibration to the factory setting:
+
+ $obd->ResetVoltage();
+=cut
+
+sub ResetVoltage
+{
+	my ($self) = @_;
+
+  if ($self->{'debug_level'} > 0) { print "~ResetVoltage:\n"; }
+
+  $self->Command("AT CV 0000");  # Reset Voltage to factory setting
+  return ${$self->{'response'}}[0];
+}
+
+
+#*****************************************************************
+
+=head2 WriteStoredDataByte
+
+Writes $byte_value to the ELM module's non-volatile storage area.
+
+ $obd->WriteStoredDataByte($byte_value);
+
+The value of this byte can be read using:
+
+ $obd->Read("Stored data byte");
+ 
+=cut
+
+sub WriteStoredDataByte
+{
+	my ($self, $value) = @_;
+
+  if ($self->{'debug_level'} > 0) { print "~WriteStoredDataByte: $value\n"; }
+  
+  $self->Command("AT SD $value");  # Save Data byte value
+  return ${$self->{'response'}}[0];
+}
+
+
+#*****************************************************************
+
+=head2 Command
+
+Send a command to the ELM, read any response and decode it if
+was an ECU command.
+AT command responses are placed in the $self->{'response'} array.
+Responses to ECU commands are written to the $self->{'results'}
+structure. On return a status of 0 indicates no errors.
+
+This function is called by other module functions 'Read',
+'ClearTroubleCodes' etc., but can be used to send commands that aren't
+otherwise supported.
+
+ $status = $obd->Command($command_string);
+=cut
 
 sub Command
 {
   my ($self, $command) = @_;
 
-  my $status = 0;
+  my $status = "ok";
 
   if ($self->{'debug_level'} > 0) { print "~Command: $command\n"; }
   my @command_parts = split(' ', $command);
@@ -2867,7 +2752,7 @@ sub Command
 
   $status = $self->ReadResponse();
 
-  if ($command_parts[0] ne "AT" && $status == 0)
+  if ($command_parts[0] ne "AT" && $status eq "ok")
   {
     $self->{'last_command'} = hex($command_parts[0]);
     if ($has_sub_command[$self->{'last_command'}])
@@ -2888,30 +2773,185 @@ sub Command
 
 #*****************************************************************
 
-# Write a command to the serial port
+=head2 GetResult
+
+Returns a value from the last set of results from the ELM/ECU
+
+$type can be one of the following:
+bool (1 bit), byte (8 bit), word (16 bit), dword (32 bit) or string.
+$number is the zero-based index into the array of results and takes
+the type into account such that $number=0 returns the first byte,
+word or dword and $number=1, returns the second.
+Booleans are treated the same as bytes and require individual bits
+to be extracted separately.
+For strings, $number is the offset of the start of the string.
+
+This function is called by 'Read'.
+
+ $obd->GetResult($type, $number);
+=cut
+
+sub GetResult
+{
+	my ($self, $type, $number) = @_;
+
+  my $result;
+  $self->{'number_of_results'} = 0;
+
+  if (!defined($number)) { $number = 0; }
+  
+  if ($self->{'debug_level'} > 1) { print "GetResult: Type: $type: Number: $number\n"; }
+
+  foreach my $address (sort keys %{$self->{'results'}})
+  {
+		my $number_of_result_bytes = $self->{'results'}->{$address}->{'response_length'};
+    if ($self->{'results'}->{$address}->{'command'} == $self->{'last_command'} && 
+    $self->{'results'}->{$address}->{'sub_command'} == $self->{'last_sub_command'})
+    {
+      if ($type eq "bool")
+      {
+				if ($number_of_result_bytes < ($number+1))
+				{
+					$result = "no result";
+				}
+				else
+				{
+					$result = ${$self->{'results'}->{$address}->{'result'}}[$number];
+				}
+        push @{$self->{'command_addresses'}}, $address;
+        push @{$self->{'command_results'}}, $result;
+        $self->{'number_of_results'}++;
+      }
+      elsif ($type eq "byte")
+      {
+				if ($number_of_result_bytes < ($number+1))
+				{
+					$result = "no result";
+				}
+				else
+				{
+					$result = ${$self->{'results'}->{$address}->{'result'}}[$number];
+				}
+        push @{$self->{'command_addresses'}}, $address;
+        push @{$self->{'command_results'}}, $result;
+        $self->{'number_of_results'}++;
+      }
+      elsif ($type eq "word")
+      {
+				if ($number_of_result_bytes < (($number*2)+2))
+				{
+					$result = "no result";
+				}
+				else
+				{
+					$result = ((${$self->{'results'}->{$address}->{'result'}}[$number*2] * 256) + ${$self->{'results'}->{$address}->{'result'}}[($number*2)+1] );
+				}
+				push @{$self->{'command_addresses'}}, $address;
+				push @{$self->{'command_results'}}, $result;
+				$self->{'number_of_results'}++;
+      }
+      elsif ($type eq "dword")
+      {
+				if ($number_of_result_bytes < (($number*4)+4))
+				{
+					$result = "no result";
+				}
+				else
+				{
+					$result = ((${$self->{'results'}->{$address}->{'result'}}[$number*4] * 16777216) + ${$self->{'results'}->{$address}->{'result'}}[($number*4)+1] * 65536);
+					$result += ((${$self->{'results'}->{$address}->{'result'}}[($number*4)+2] * 256) + ${$self->{'results'}->{$address}->{'result'}}[($number*4)+3] );
+				}
+        push @{$self->{'command_addresses'}}, $address;
+        push @{$self->{'command_results'}}, $result;
+        $self->{'number_of_results'}++;
+      }
+      elsif ($type eq "string")
+      {
+				if ($number_of_result_bytes < $number)
+				{
+					$result = "no result";
+				}
+				else
+				{
+					$result = "";
+					foreach (@{$self->{'results'}->{$address}->{'result'}})
+					{
+						if ($number > 0)
+						{
+							$number--;
+						}
+						else
+						{
+							if ($_ > 32 && $_ < 127)  # Ignore non-printable characters
+							{
+								$result .= chr($_);
+							}
+						}
+					}
+				}
+        push @{$self->{'command_addresses'}}, $address;
+        push @{$self->{'command_results'}}, $result;
+        $self->{'number_of_results'}++;
+      }
+    }
+    else
+    {
+      $result = 0;
+    }
+  }
+
+  return $result;
+}
+
+
+#*****************************************************************
+
+
+=head2 WriteCommand
+
+Write a command to the serial port unless replay is in progress.
+
+This function is called by the 'Command' function.
+
+ $status = $obd->WriteCommand($command_string);
+=cut
 
 sub WriteCommand
 {
   my ($self, $command) = @_;
 
-  my $status = 0;
+  my $status = "ok";
 
   if ($self->{'debug_level'} > 0) { print "~WriteCommand: $command\n"; }
 
-  if ($self->{'replay_file'} == 0 && $self->PortOK)
+  if ($self->{'replay_file'} == 0)
   {
-    $command .= "$cr$lf";
-    $self->{'port'}->write("$command");
-  }
+		if ($self->PortOK)
+		{
+			$command .= "$cr$lf";
+			$self->{'port'}->write("$command");
+		}
+		else
+		{
+			$status = "Port not ok";
+		}
+	}
 
   return $status;
 }
 
 #*****************************************************************
 
-# Read the ELM's response from the serial port and put each line 
-# into the $self->{'response'} array.
-# Turn on debugging for a dump of the response array.
+=head2 ReadResponse
+
+Read the ELM's response from the serial port and put each line 
+into the $self->{'response'} array.
+Turn on debugging for a dump of the response array.
+
+This function is called by the 'Command' function.
+
+ $status = $obd->ReadResponse();
+=cut
 
 sub ReadResponse
 {
@@ -2920,7 +2960,7 @@ sub ReadResponse
   my $bytes_to_read = 1;
   my $count_in = 0;
   my $string_in = "";
-  my $status = 0;
+  my $status = "ok";
   my $timeout = 4;  # Command 01 04 failed when timeout was 2
   my $line = "";
   $self->{'response'} = ();	# Array of strings, one per line of the response.
@@ -2982,11 +3022,15 @@ sub ReadResponse
 
   if ($self->{'response_length'} == 0)
   {
-    $status = 1;
+    $status = "Zero length response";
   }
   elsif ($self->{'response'}[0] eq "NO DATA")
   {
-  	$status = 2;
+  	$status = "NO DATA";
+  }
+  elsif ($self->{'response'}[0] eq "STOPPED")
+  {
+  	$status = "STOPPED";
   }
 
   if ($self->{'debug_level'} > 0)
@@ -3005,8 +3049,15 @@ sub ReadResponse
 
 #*****************************************************************
 
-# Decode the ECU response (in the $self->{'response'} array) and
-# write the result to the $self->{'results'} structure.
+=head2 DecodeResponse
+
+Decode the ECU response (in the $self->{'response'} array) and
+write the result to the $self->{'results'} structure.
+
+This function is called by the 'Command' function.
+
+ $status = $obd->DecodeResponse();
+=cut
 
 sub DecodeResponse
 {
@@ -3156,131 +3207,15 @@ sub DecodeResponse
 
 #*****************************************************************
 
-# Returns a value from the last set of results from the ELM/ECU
+=head2 GetResultsCommand06_CAN
 
-# $type can be one of the following:
-# bool (1 bit), byte (8 bit), word (16 bit), dword (32 bit) or string.
-# $number is the zero-based index into the array of results and takes
-# the type into account such that $number=0 returns the first byte,
-# word or dword and $number=1, returns the second.
-# Booleans are treated the same as bytes and require individual bits
-# to be extracted separately.
-# For strings, $number is the offset of the start of the string.
+Get the results for command 06 on a CAN system.
 
-sub GetResult
-{
-	my ($self, $type, $number) = @_;
+This function is called by 'Read' and is not intended to be called by
+other functions.
 
-  my $result;
-  $self->{'number_of_results'} = 0;
-
-  if (!defined($number)) { $number = 0; }
-  
-  if ($self->{'debug_level'} > 1) { print "GetResult: $type: $number\n"; }
-
-  foreach my $address (sort keys %{$self->{'results'}})
-  {
-		my $number_of_result_bytes = $self->{'results'}->{$address}->{'response_length'};
-    if ($self->{'results'}->{$address}->{'command'} == $self->{'last_command'} && 
-    $self->{'results'}->{$address}->{'sub_command'} == $self->{'last_sub_command'})
-    {
-      if ($type eq "bool")
-      {
-				if ($number_of_result_bytes < ($number+1))
-				{
-					$result = "no result";
-				}
-				else
-				{
-					$result = ${$self->{'results'}->{$address}->{'result'}}[$number];
-				}
-        push @{$self->{'command_addresses'}}, $address;
-        push @{$self->{'command_results'}}, $result;
-        $self->{'number_of_results'}++;
-      }
-      elsif ($type eq "byte")
-      {
-				if ($number_of_result_bytes < ($number+1))
-				{
-					$result = "no result";
-				}
-				else
-				{
-					$result = ${$self->{'results'}->{$address}->{'result'}}[$number];
-				}
-        push @{$self->{'command_addresses'}}, $address;
-        push @{$self->{'command_results'}}, $result;
-        $self->{'number_of_results'}++;
-      }
-      elsif ($type eq "word")
-      {
-				if ($number_of_result_bytes < (($number*2)+2))
-				{
-					$result = "no result";
-				}
-				else
-				{
-					$result = ((${$self->{'results'}->{$address}->{'result'}}[$number*2] * 256) + ${$self->{'results'}->{$address}->{'result'}}[($number*2)+1] );
-				}
-				push @{$self->{'command_addresses'}}, $address;
-				push @{$self->{'command_results'}}, $result;
-				$self->{'number_of_results'}++;
-      }
-      elsif ($type eq "dword")
-      {
-				if ($number_of_result_bytes < (($number*4)+4))
-				{
-					$result = "no result";
-				}
-				else
-				{
-					$result = ((${$self->{'results'}->{$address}->{'result'}}[$number*4] * 16777216) + ${$self->{'results'}->{$address}->{'result'}}[($number*4)+1] * 65536);
-					$result += ((${$self->{'results'}->{$address}->{'result'}}[($number*4)+2] * 256) + ${$self->{'results'}->{$address}->{'result'}}[($number*4)+3] );
-				}
-        push @{$self->{'command_addresses'}}, $address;
-        push @{$self->{'command_results'}}, $result;
-        $self->{'number_of_results'}++;
-      }
-      elsif ($type eq "string")
-      {
-				if ($number_of_result_bytes < $number)
-				{
-					$result = "no result";
-				}
-				else
-				{
-					$result = "";
-					foreach (@{$self->{'results'}->{$address}->{'result'}})
-					{
-						if ($number > 0)
-						{
-							$number--;
-						}
-						else
-						{
-							if ($_ > 32 && $_ < 127)  # Ignore non-printable characters
-							{
-								$result .= chr($_);
-							}
-						}
-					}
-				}
-        push @{$self->{'command_addresses'}}, $address;
-        push @{$self->{'command_results'}}, $result;
-        $self->{'number_of_results'}++;
-      }
-    }
-    else
-    {
-      $result = 0;
-    }
-  }
-  
-  return $result;
-}
-
-
-#*****************************************************************
+ $obd->GetResultsCommand06_CAN($results_reference);
+=cut
 
 sub GetResultsCommand06_CAN
 {
@@ -3356,221 +3291,346 @@ sub GetResultsCommand06_CAN
 
 #*****************************************************************
 
-=head2 ShowTroubleCodes
+=head2 OpenPort
 
-Display any trouble codes on the console:
+Try to find an ELM module on a COM port.
+If a $port_name is supplied, start with that one and work upwards.
 
- $obd->ShowTroubleCodes();
+This function is called by 'new'.
+
+ $obd->OpenPort($port_name);
 =cut
 
-sub ShowTroubleCodes
+sub OpenPort
 {
-	my ($self) = @_;
+  my ($self, $port_name) = @_;
+  my $quiet = 0;
+  my $port = -1;
+  my $port_count = 0;
 
-  my $malfunction_indicator_lamp_mask = 128;
-  my $number_of_codes_mask = 127;
-
-  if ($self->{'debug_level'} > 0) { print "ShowTroubleCodes\n"; }
-
-  $self->Command("01 01");  # Get number of trouble codes
-
-  my $number_of_codes = $self->GetResult("byte");
-  my $malfunction_indicator_lamp_state = $number_of_codes & $malfunction_indicator_lamp_mask;
-  $number_of_codes &= $number_of_codes_mask;
-   
-  if ($number_of_codes > 0)
+  if (!defined($port_name) || $port_name eq "")
   {
-    $self->DisplayTroubleCodes("03");
+    if ($^O eq "MSWin32")
+    {
+      $port_name = "COM1";
+    }
+    else
+    {
+      $port_name = "/dev/ttyUSB0";
+    }
   }
-  else
+
+ 	my $port_number = $port_name;
+	$port_number =~ s/[^0-9]//g;  # Strip everything that isn't numeric
+
+	my $port_text = $port_name;
+	$port_text =~ s/[0-9]//g;     # Strip everything that is numeric
+
+  do
   {
-    print "No trouble codes found.\n";
+    $port_name = $port_text.$port_number;
+    
+    if ($^O eq "MSWin32")
+    {
+      $port = Win32::SerialPort->new ($port_name);
+    }
+    else
+    {
+      $port = Device::SerialPort->new($port_name, $quiet);
+    }
+
+    if (defined($port))
+    {
+      $port->user_msg(1); 	    # misc. warnings
+      $port->error_msg(1); 	    # hardware and data errors
+
+      $port->baudrate(38400);
+      $port->parity("none");
+      $port->parity_enable(0);  # for any parity except "none"
+      $port->databits(8);
+      $port->stopbits(1);
+      $port->handshake('none');
+
+      $port->write_settings;
+
+      $self->{'port'} = $port;
+      $self->Command("AT Z");   # Reset Device
+      foreach (@{$self->{'response'}})
+      {
+        if (substr($_, 0, 5) eq "ELM32")  # Allow 328 & 329 as well
+        {
+          $self->{'ELM_type'} = substr($_, 0, 6);
+        }
+      }
+      if ($self->{'ELM_type'} eq "NONE" && $self->{'debug_level'} > 0)
+      {
+        print "Can't find an ELM module on $port_name\n";
+      }
+    }
+    else
+    {
+      if ($self->{'debug_level'} > 0)
+      {
+        print "Can't open $port_name: $!\n";
+      }
+      $self->{'port'} = -1;
+    }
+
+    $port_number++;
+    $port_count++;
+  } until(($self->{'port'} != -1 && $self->{'ELM_type'} ne "NONE") || $port_count > $max_ports_to_search);
+
+  if ($self->{'ELM_type'} eq "NONE")
+  {
+    $self->{'port'} = -1;
+    die "Couldn't find an ELM module!\n"; 
   }
 }
 
 
 #*****************************************************************
 
-# This function is called by ShowTroubleCodes. It displays any
-# trouble codes on the console.
+=head2 ConfigureDevice
 
-sub DisplayTroubleCodes
+Set up the ELM module to return data in the required form.
+
+This function is called by 'new' and should not be called again.
+
+ $obd->ConfigureDevice();
+=cut
+
+sub ConfigureDevice
+{
+	my ($self) = @_;
+
+  if ($self->{'debug_level'} > 0) { print "ConfigureDevice\n"; }
+  
+  if ($self->PortOK)
+  {
+    $self->Command("AT E0");   # Turn echo off
+
+    $self->Command("AT L0");   # Turn linefeeds off
+
+    $self->Command("AT SP 0");  # Set Protocol to auto
+
+    $self->Command("AT DPN");  # Display Protocol number
+
+    $self->Command("AT DP");  # Display Protocol
+
+    $self->Command("AT H1");  # Turn headers on
+
+    $self->Command("01 00");  # Prepare to talk and get available PID's
+  }
+}
+
+
+#*****************************************************************
+
+=head2 FindAvailableCommands
+
+Query the ECU to find out which commands are supported and 
+annotate the value entries in the 'get' structure with the 
+'available' flag set to 0 (not supported) or 1 (supported).
+
+This function is called by 'new' and should not be called again.
+
+ $obd->FindAvailableCommands();
+=cut
+
+sub FindAvailableCommands
+{
+	my ($self) = @_;
+
+	my @commands = ( "01 PIDs supported (01-20)",
+	                 "02 PIDs supported (01-20)",
+	                 "09 PIDs supported (01-20)"
+	               );
+
+  if ($self->{'debug_level'} > 0) { print "FindAvailableCommands:\n"; }
+
+	if ($self->{'bus_type'} eq "CAN")
+	{
+		push @commands, "06 MIDs supported (01-20)";	# Command only supported by CAN systems
+	}
+	else
+	{
+		push @commands, "05 TIDs supported (01-20)";	# Command only supported by non-CAN systems
+#		push @commands, "06 TIDs supported (01-20)";	# Command only supported by non-CAN systems
+	}
+
+	foreach my $next_command (@commands)
+	{
+		do
+		{
+			$next_command = $self->ProcessAvailableCommands($next_command);
+		} while (defined($next_command));
+	}
+}
+
+
+#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+=head2 ProcessAvailableCommands
+
+Query the ECU to find out which commands are supported and 
+annotate the value entries in the 'get' structure with the 
+'available' flag set to 0 (not supported) or 1 (supported).
+
+This function is called by 'FindAvailableCommands' and should not be
+called by any other functions.
+
+ $obd->ProcessAvailableCommands($command);
+=cut
+
+sub ProcessAvailableCommands
 {
 	my ($self, $command) = @_;
 
-  my $result = 0;
-  $self->{'trouble_codes'} = [];
-
-  if ($self->{'debug_level'} > 0) { print "~DisplayTroubleCodes $command\n"; }
-
-  $self->Command($command);  # Get trouble codes
+  my $next_command = undef;
   
-  foreach my $address (sort keys %{$self->{'results'}})
+  if ($self->{'debug_level'} > 0) { print "~ProcessAvailableCommands: $command\n"; }
+
+	$self->{'get'}->{$command}->{'available'} = 1;	# Flag the command as available
+	
+  my $response = $self->Read($command);
+
+  if ($self->{'debug_level'} > 1) { print "$command\n"; }
+
+  if ($response->{'status'} eq "ok")
   {
-    if ($self->{'debug_level'} > 1)
+    foreach my $result (@{$response->{'results'}})
     {
-      print "Message Type: $self->{'results'}->{$address}->{'format'}\n";
-      print "$address\n";
-    }
-    if ($self->{'results'}->{$address}->{'command'} == $self->{'last_command'})
-    {
-      my $index = 0;
-      do
+      $self->{'get'}->{$result->{'name'}}->{'available'} = $result->{'value'};
+      if ($self->{'debug_level'} > 1) { print "$result->{'address'} - $result->{'name'}: $result->{'value'} $result->{'unit'}\n"; }
+
+      if (substr($result->{'name'}, 4, 15) eq "IDs supported (" && $result->{'value'} == 1)
       {
-        $result = ((${$self->{'results'}->{$address}->{'result'}}[$index] * 256) + ${$self->{'results'}->{$address}->{'result'}}[$index+1] );
-        if ($result !=0)
-        {
-          push @{$self->{'command_addresses'}}, $address;
-          push @{$self->{'command_results'}}, $result;
-          $self->{'number_of_results'}++;
-        }
-        $index += 2;
-      } while ($result != 0);
+        $next_command = $result->{'name'};
+      }
+      elsif ( $result->{'value'} == 1 &&
+						((substr($result->{'name'}, -2, 2) eq "13" && $self->{'get'}->{'Location of oxygen sensors 13'}->{'available'} == 1)
+					|| (substr($result->{'name'}, -2, 2) eq "1D" && $self->{'get'}->{'Location of oxygen sensors 1D'}->{'available'} == 1))
+					  )
+      {
+        my $new_name = substr($result->{'name'}, 0, length($result->{'name'})-3);
+        
+				if ($self->{'debug_level'} > 2)
+				{
+					print "Old name: >$result->{'name'}<\n";
+					print "New name: >$new_name<\n";
+				}
+				
+        $self->{'get'}->{$new_name} = delete($self->{'get'}->{$result->{'name'}});
+				if ($self->{'debug_level'} > 3)
+				{
+					print Dumper($self->{'get'}->{$new_name});
+				}
+      }
     }
   }
-
-  if ($self->{'debug_level'} > 1)
+  else
   {
-    print "Error code(s): @{$self->{'command_results'}}\n";
-  }
-  
-  foreach my $code (@{$self->{'command_results'}})
-  {
-    my $decoded_code = DecodeTroubleCode($code);
-    push @{$self->{'trouble_codes'}} , $decoded_code;
-  }
-}
-
-
-#*****************************************************************
-
-sub DecodeTroubleCode
-{
-	my ($self, $code) = @_;
-
-  my @codes = ("P0","P1","P2","P3","C0","C1","C2","C3","B0","B1","B2","B3","U0","U1","U2","U3");
-
-  my $code_prefix_mask = 61440;
-  my $code_mask = 4095;
-  my $number_of_codes_mask = 127;
-
-	if ($code eq "no result" || $code == 0)
-	{
-		return "No Trouble Code";
+		# Flag command as unavailable
+		$self->{'get'}->{$command}->{'available'} = 0;
 	}
 
-  my $code_prefix = ($code & $code_prefix_mask) >> 12;
-  $code &= $code_mask;
-  $code = sprintf("%03X", $code);
-  my $decoded_code = "$codes[$code_prefix]$code";
+  return $next_command;
+}
 
-  if ($self->{'debug_level'} > 1)
-  {
-    print "Code prefix: $code_prefix, Code: $code, Decoded: $decoded_code\n";
+
+#*****************************************************************
+
+
+=head2 Replay
+
+Process a file containing debugging output and replay the commands
+through the module.
+
+This function is called by 'new' and should not be called by other functions.
+
+ $obd->Replay($replay_filename);
+=cut
+
+sub Replay
+{
+  my ($self, $replay_filename) = @_;
+  $self->{'replay_file'} = 1;
+  
+  my $status = "ok";
+  my $replay_command="";
+
+  # Open the file containing the command and response data
+  open (REPLAYFILE, $replay_filename);
+
+  my $get_command = 0;
+  my $seek_response = 1;
+  my $read_response = 2;
+  my $get_result = 4;
+  
+  my $replay_state = $get_command; 
+
+  while (<REPLAYFILE>)
+  { 
+    # Iterate through issuing commands and parsing responses
+    $_ =~ s/\r?\n//g;   # Strip all carriage returns
+
+    if ($replay_state == $get_command)
+    {
+      if (substr($_, 0, 1) eq "~")
+      {
+        $_ = substr($_, 1);
+        my @linepart = split(":", $_);
+        foreach my $part (@linepart)
+        {
+          $part =~ s/^\s+|\s+$//g; # Strip unwanted whitespace
+        }
+
+        $replay_command = '$self->'.$linepart[0]."(\"";
+        my $number_of_parameters = scalar(@linepart);
+        for (my $index=1; $index<$number_of_parameters; $index++)
+        {
+          $replay_command .= $linepart[$index];
+          if ($index < ($number_of_parameters-1))
+          {
+            $replay_command .= ",";
+          } 
+        }				
+        $replay_command .= "\");";
+        
+        $replay_state = $seek_response;
+      }
+    }
+    elsif ($replay_state == $seek_response)
+    {
+      if ($_ eq "Response")
+      {
+        $replay_state = $read_response;
+      }
+    }
+    elsif ($replay_state == $read_response)
+    {
+      if ($_ eq "End of response")
+      {
+        # Execute the command we just got the response to...
+        $status = "ok";
+        $status = eval($replay_command);
+        if ($self->{'debug_level'} > 1)
+        {
+          print "Status: $status\n";
+          print Dumper($status);
+        }
+        $replay_state = $get_command;
+      }
+      else
+      {
+        if (length($_) > 0)
+        {
+          push @{$self->{'replay_response'}}, $_;
+        }
+      }
+    }
   }
-	return $decoded_code
-}
-
-
-#*****************************************************************
-
-=head2 ClearTroubleCodes
-
-Clear any Trouble Codes and sensor data:
-
- $obd->ClearTroubleCodes();
-
-Note that clearing the sensor data will cause the vehicle to run on
-default values until it has recalibrated itself. This may affect
-performance and fuel economy.
-
-The ISO specification also insists that any user interface which
-invokes this function should display an "are you sure?" message
-to the user before calling it.
-
-=cut
-
-sub ClearTroubleCodes
-{
-	my ($self) = @_;
-
-  if ($self->{'debug_level'} > 0) { print "~ClearTroubleCodes\n"; }
-  $self->Command("04");  # Clear Trouble Codes and sensor data
-
-  my $result = $self->GetResult("byte");
-  return $result;  # Returns 0 if codes have been cleared or error code.
-}
-
-
-#*****************************************************************
-
-=head2 CalibrateVoltage
-
-Changes the calibration value used by the ELM module. The value
-$Voltage is a string containing a fixed point value of the form:
-xx.xx, e.g "11.99", "12.01" etc.
-
- $obd->CalibrateVoltage($Voltage);
-
-The Voltage can be read by calling:
-
- my $response = $obd->read("Input Voltage");
- 
-=cut
-
-sub CalibrateVoltage
-{
-	my ($self, $Voltage) = @_;
-
-  if ($self->{'debug_level'} > 0) { print "~CalibrateVoltage: $Voltage\n"; }
-  
-  $self->Command("AT CV $Voltage");  # Calibrate Voltage
-  return ${$self->{'response'}}[0];
-}
-
-
-#*****************************************************************
-
-=head2 ResetVoltage
-
-Resets the ELM module's Voltage calibration to the factory setting:
-
- $obd->ResetVoltage();
-=cut
-
-sub ResetVoltage
-{
-	my ($self) = @_;
-
-  if ($self->{'debug_level'} > 0) { print "~ResetVoltage:\n"; }
-
-  $self->Command("AT CV 0000");  # Reset Voltage to factory setting
-  return ${$self->{'response'}}[0];
-}
-
-
-#*****************************************************************
-
-=head2 WriteStoredDataByte
-
-Writes $byte_value to the ELM module's non-volatile storage area.
-
- $obd->WriteStoredDataByte($byte_value);
-
-The value of this byte can be read using:
-
- $obd->Read("Stored data byte");
- 
-=cut
-
-sub WriteStoredDataByte
-{
-	my ($self, $value) = @_;
-
-  if ($self->{'debug_level'} > 0) { print "~WriteStoredDataByte: $value\n"; }
-  
-  $self->Command("AT SD $value");  # Save Data byte value
-  return ${$self->{'response'}}[0];
+  close (REPLAYFILE);
 }
 
 

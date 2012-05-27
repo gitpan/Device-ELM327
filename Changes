@@ -30,3 +30,9 @@ Revision history for Device-ELM327
 0.07  20 May 2012
       Added conditional serial module name to PREREQ_PM in Makefile.PL.
       Added text to explain boolean results.
+
+0.08  27 May 2012
+      Increased $max_ports_to_search to 64.
+			Revised the error values returned.
+			Removed obsolete DisplayTroubleCodes function.
+			Added POD for undocumented functions and reordered functions.
