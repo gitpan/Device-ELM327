@@ -36,3 +36,10 @@ Revision history for Device-ELM327
 			Revised the error values returned.
 			Removed obsolete DisplayTroubleCodes function.
 			Added POD for undocumented functions and reordered functions.
+
+0.09  16 October 2013
+      Investigated bug #89287. Have not managed to replicate, but added
+      extra diagnostic text to ShowTroubleCodes.
+      Fixed a bug in the handling of results for commands 03, 07 & 0A.
+      Added checking for and reporting of negative response codes and
+      handling for 78 (Request Correctly Received - Response Pending).

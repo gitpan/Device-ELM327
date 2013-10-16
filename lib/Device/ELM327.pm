@@ -32,11 +32,11 @@ Device::ELM327 - Methods for reading OBD data with an ELM327 module.
 
 =head1 VERSION
 
-Version 0.08
+Version 0.09
 
 =cut
 
-our $VERSION = '0.08';
+our $VERSION = '0.09';
 
 #*****************************************************************
 
@@ -141,8 +141,26 @@ sub new
 						"Negative response"			=> "The vehicle returned a negative response",
 						"Unsupported name"			=> "The vehicle does not support this value",
 						"Unrecognised name"			=> "ELM327.pm does not recognise this value",
+						"General Reject"				=> "Service was rejected. ECU did not specify the reason",
+						"Service Not Supported"	=> "The ECU does not support the requested service",
+						"Sub Function Not Supported - Invalid Format" => "The ECU does not support the arguments of the request message or the format of the argument bytes do not match the prescribed format for the service",
+						"Busy - Repeat Request"	=> "The ECU is temporarily too busy to perform the requested operation",
+						"Conditions Not Correct or Request Sequence Error" => "ECU prerequisite conditions not met. Have commands been issued in the correct order?",
+						"Request Correctly Received - Response Pending" => "Correct command and parameters received, but ECU is busy. Response will follow.",
 						};
-		
+
+
+	# Negative response codes (received with a 7F Negative Response Service Identifier)
+	$self->{'negative_response_codes'} = {
+						"0"  => "ok",
+						"10" => "General Reject",
+						"11" => "Service Not Supported",
+						"12" => "Sub Function Not Supported - Invalid Format",
+						"21" => "Busy - Repeat Request",
+						"22" => "Conditions Not Correct or Request Sequence Error",
+						"78" => "Request Correctly Received - Response Pending",
+						};
+
 
 	# ISO Standard Test Id's for use with function 6.
 	$self->{'Standardized_Test_IDs'} = {
@@ -2567,12 +2585,28 @@ sub ShowTroubleCodes
   $self->Command("01 01");  # Get number of trouble codes
 
   my $number_of_codes = $self->GetResult("byte");
+  
   my $malfunction_indicator_lamp_state = $number_of_codes & $malfunction_indicator_lamp_mask;
   $number_of_codes &= $number_of_codes_mask;
    
-  if ($number_of_codes > 0)
+	print "Malfunction indicator lamp state: ";
+  if ($malfunction_indicator_lamp_state > 0)
   {
+		print "ON\n";
+	}
+	else
+  {
+		print "OFF\n";
+	}
+	
+  if ($number_of_codes > 0 || $malfunction_indicator_lamp_state > 0)
+  {
+		print "$number_of_codes trouble code";
+		if ($number_of_codes != 1) { print "s"; }
+		print ":\n";
+
     $self->Show("Emission-related diagnostic trouble codes");
+    $self->Show("Emission-related diagnostic trouble codes detected during current or last completed driving cycle");
   }
   else
   {
@@ -2607,6 +2641,7 @@ sub ClearTroubleCodes
   $self->Command("04");  # Clear Trouble Codes and sensor data
 
   my $result = $self->GetResult("byte");
+
   return $result;  # Returns 0 if codes have been cleared or error code.
 }
 
@@ -2750,23 +2785,27 @@ sub Command
 
   $status = $self->WriteCommand("$command");
 
-  $status = $self->ReadResponse();
+	do
+	{
+		$status = $self->ReadResponse();
 
-  if ($command_parts[0] ne "AT" && $status eq "ok")
-  {
-    $self->{'last_command'} = hex($command_parts[0]);
-    if ($has_sub_command[$self->{'last_command'}])
-    {
-      $self->{'last_sub_command'} = hex($command_parts[1]);
-    }
-    else
-    {
-      $self->{'last_sub_command'} = 0;
-    }
-      
-    $self->DecodeResponse();
-  }
+		if ($command_parts[0] ne "AT" && $status eq "ok")
+		{
+			$self->{'last_command'} = hex($command_parts[0]);
+			if ($has_sub_command[$self->{'last_command'}])
+			{
+				$self->{'last_sub_command'} = hex($command_parts[1]);
+			}
+			else
+			{
+				$self->{'last_sub_command'} = 0;
+			}
+				
+	    $status = $self->DecodeResponse();
+		}
 
+	} while ($status eq "Request Correctly Received - Response Pending");
+	
   return $status;
 }
 
@@ -2840,6 +2879,7 @@ sub GetResult
       {
 				if ($number_of_result_bytes < (($number*2)+2))
 				{
+					if ($self->{'debug_level'} > 2) { print "Number of result bytes: $number_of_result_bytes\n"; }
 					$result = "no result";
 				}
 				else
@@ -3063,6 +3103,7 @@ sub DecodeResponse
 {
   my ($self) = @_;
 
+	my $status = "ok";
   my $results = {};
   my $command_mask = 63;
   my $line_number = 0;
@@ -3089,6 +3130,7 @@ sub DecodeResponse
     if (scalar(@line_parts) > 2)
     {
       my $address = shift @line_parts;
+      $self->{'results'}->{$address}->{'response_code'} = 0;
       if (length($address) < 3)
       {
         # Not CAN ($address contains the priority byte)
@@ -3139,41 +3181,57 @@ sub DecodeResponse
     
         if ($line_number <= 16)
         {
+					if ($line_number == 16)
+					{
+            $self->{'results'}->{$address}->{'response_length'} = hex(shift @line_parts);     
+					}
+					
+          $self->{'results'}->{$address}->{'command'} = (hex(shift @line_parts) & $command_mask); # Error code will now be 63 rather than 7F
+
           if ($line_number < 16)
           {
-            $self->{'results'}->{$address}->{'response_length'} = $line_number - 2; # Do not include command and sub-command bytes
-          }
-          else
-          {
-            $self->{'results'}->{$address}->{'response_length'} = hex(shift @line_parts);     
-          }      
-          $self->{'results'}->{$address}->{'command'} = (hex(shift @line_parts) & $command_mask);     
-          if ($self->{'results'}->{$address}->{'command'} == 4) { push(@line_parts, "00"); }
-          if ($self->{'results'}->{$address}->{'command'} == $command_mask)
-          {
-            $self->{'results'}->{$address}->{'command'} = (hex(shift @line_parts));
+						if ($has_sub_command[$self->{'results'}->{$address}->{'command'}] || $self->{'results'}->{$address}->{'command'} == $command_mask)
+						{
+							$self->{'results'}->{$address}->{'response_length'} = $line_number - 2; # Do not include command and sub-command bytes
+						}
+						else
+						{
+							$self->{'results'}->{$address}->{'response_length'} = $line_number - 1; # Do not include command byte (no sub-command byte)
+						}
           }
 
-          if ($has_sub_command[$self->{'results'}->{$address}->{'command'}])
-          {     
-            $self->{'results'}->{$address}->{'sub_command'} = hex(shift @line_parts);
-          }
-          else
+          if ($self->{'results'}->{$address}->{'command'} == 4) { push(@line_parts, "00"); } # Command 04 only returns a 44 SID on success. Append a 0 byte to the result.
+          
+          if ($self->{'results'}->{$address}->{'command'} == $command_mask)	# If there was an error, shift out the real command number.
           {
-            $self->{'results'}->{$address}->{'sub_command'} = 0;
+            $self->{'results'}->{$address}->{'command'} = (hex(shift @line_parts));
+            $self->{'results'}->{$address}->{'response_code'} = $line_parts[0];
           }
-          if ($self->{'results'}->{$address}->{'command'} == 2)
-          {
-						$self->{'results'}->{$address}->{'frame'} = hex(shift @line_parts);
+					else
+					{
+						if ($has_sub_command[$self->{'results'}->{$address}->{'command'}])
+						{     
+							$self->{'results'}->{$address}->{'sub_command'} = hex(shift @line_parts);
+						}
+						else
+						{
+							$self->{'results'}->{$address}->{'sub_command'} = 0;
+						}
+						if ($self->{'results'}->{$address}->{'command'} == 2)
+						{
+							$self->{'results'}->{$address}->{'frame'} = hex(shift @line_parts);
+						}
 					}
         }     
       }
       $self->{'bus_type'} = $self->{'results'}->{$address}->{'format'};  
       $results->{$address}->{$line_number} = join(" ", @line_parts);
+			$self->{'results'}->{$address}->{'response_reason'} = $self->{'negative_response_codes'}->{$self->{'results'}->{$address}->{'response_code'}};
+			$status = $self->{'results'}->{$address}->{'response_reason'};
     }
   }
 
-  if ($self->{'debug_level'} > 1)
+  if ($self->{'debug_level'} > 2)
   {
     print "Decoded results:\n";  
     print Dumper($results);
@@ -3201,7 +3259,8 @@ sub DecodeResponse
     print "\nFully decoded results:\n";  
     print Dumper($self->{'results'});
   }
-  
+
+  return $status;
 }
 
 
