@@ -2,15 +2,12 @@ package Device::ELM327;
 
 use strict;
 use warnings;
-
 use Data::Dumper;
 
 my $null = "\x0";
 my $lf = "\xa";
 my $cr = "\xd";
-
 my $max_ports_to_search = 64;
-
 my @has_sub_command = (0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0);
 
 BEGIN
@@ -32,11 +29,11 @@ Device::ELM327 - Methods for reading OBD data with an ELM327 module.
 
 =head1 VERSION
 
-Version 0.09
+Version 0.10
 
 =cut
 
-our $VERSION = '0.09';
+our $VERSION = '0.10';
 
 #*****************************************************************
 
@@ -80,6 +77,26 @@ quicker to pass it into the function:
 
  my $obd = Device::ELM327->new($port_name);
 
+To override the default serial port settings (38400, no parity, 8 data
+bits, 1 stop bit, no handshaking), you can pass values with or instead
+of the port name:
+
+ my $port_details = "/dev/ttyUSB0:115200:none:8:1:none";
+ my $obd = Device::ELM327->new($port_details);
+
+The port name may be left out:
+
+ my $port_details = "115200:none:8:1:none";
+
+It is also ok to just define the port name and/or baud rate and use
+default values for parity, data bits, stop bits and handshake:
+
+ my $port_details = "/dev/ttyUSB0:115200";
+ 
+or
+
+ my $port_details = "115200";
+
 If you want extra debugging information, it can be enabled by setting 
 $debug_level to a positive number in the range 1 to 3, with more 
 information being displayed as the number increases:
@@ -103,7 +120,7 @@ To produce a file containing replayable data simply set $debug_level to
 
 sub new
 {
-	my ($class, $port_name, $debug_level, $replay_filename) = @_;
+	my ($class, $port_details, $debug_level, $replay_filename) = @_;
 	my $self = bless { }, $class;
 
 	$self->{'version'} = $VERSION;
@@ -2192,7 +2209,7 @@ sub new
 	}
   else
   {
-    $self->OpenPort($port_name);
+    $self->OpenPort($port_details);
     $self->ConfigureDevice();
     $self->FindAvailableCommands();
   }
@@ -3353,19 +3370,83 @@ sub GetResultsCommand06_CAN
 =head2 OpenPort
 
 Try to find an ELM module on a COM port.
-If a $port_name is supplied, start with that one and work upwards.
+If $port_details contains the name of a port, start with that one and
+work upwards.
+
+To override the default serial port settings (38400, no parity, 8 data
+bits, 1 stop bit, no handshaking), you can pass values in $port_details
+in the following format:
+
+ port_name:baud_rate:parity:data_bits:stop_bits:handshake
+
+e.g.
+
+ $port_details = "/dev/ttyUSB0:115200:none:8:1:none";
+
+The port name may be left out:
+
+ $port_details = "115200:none:8:1:none";
+
+It is also ok to just define the port name and/or baud rate and use
+default values for parity, data bits, stop bits and handshake:
+
+ $port_details = "/dev/ttyUSB0:115200";
+or
+ $port_details = "115200";
+
 
 This function is called by 'new'.
 
- $obd->OpenPort($port_name);
+ $obd->OpenPort($port_details);
 =cut
 
 sub OpenPort
 {
-  my ($self, $port_name) = @_;
+  my ($self, $port_details) = @_;
   my $quiet = 0;
   my $port = -1;
   my $port_count = 0;
+  my $port_name = undef;
+	my $baud_rate = 38400;
+	my $parity = "none";
+	my $data_bits = 8;
+	my $stop_bits = 1;
+	my $handshake = "none";
+	
+  if (defined($port_details) && $port_details ne "")
+  {
+		my @parameters= split(":", $port_details);
+
+		if ($parameters[0] ne "")
+		{
+			my $parameter = $parameters[0];
+			$parameter =~ s/[0-9]//g;     # Strip everything that is numeric
+			if ($parameter ne "") # If a valid serial port name has been passed
+			{
+				$port_name = shift @parameters;
+			}
+		}
+		if (scalar(@parameters) > 0)
+		{
+			$baud_rate = shift @parameters;
+			if (scalar(@parameters) > 0)
+			{
+				$parity = shift @parameters;
+				if (scalar(@parameters) > 0)
+				{
+					$data_bits = shift @parameters;
+					if (scalar(@parameters) > 0)
+					{
+						$stop_bits = shift @parameters;
+						if (scalar(@parameters) > 0)
+						{
+								$handshake = shift @parameters;
+						}
+					}
+				}
+			}
+		}
+	}
 
   if (!defined($port_name) || $port_name eq "")
   {
@@ -3403,12 +3484,19 @@ sub OpenPort
       $port->user_msg(1); 	    # misc. warnings
       $port->error_msg(1); 	    # hardware and data errors
 
-      $port->baudrate(38400);
-      $port->parity("none");
-      $port->parity_enable(0);  # for any parity except "none"
-      $port->databits(8);
-      $port->stopbits(1);
-      $port->handshake('none');
+      $port->baudrate($baud_rate);
+      $port->parity($parity);
+      if ($parity eq "none")
+      {
+				$port->parity_enable(0);
+			}
+			else
+      {
+				$port->parity_enable(1);  # for any parity except "none"
+			}
+      $port->databits($data_bits);
+      $port->stopbits($stop_bits);
+      $port->handshake($handshake);
 
       $port->write_settings;
 
@@ -3655,7 +3743,6 @@ sub Replay
           } 
         }				
         $replay_command .= "\");";
-        
         $replay_state = $seek_response;
       }
     }
@@ -3705,7 +3792,7 @@ Please report any bugs or feature requests to C<bug-device-elm327 at rt.cpan.org
 the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Device-ELM327>. 
 I will be notified, and then you'll automatically be notified of progress on your bug as I make changes.
 
-Please also include a debug trace showing the error. This can be done by setting $debug_level in the constructor to 1 and piping the output to a file.
+Please also include a debug trace showing the error so that I can replay your vehicle data and see exactly what you're seeing. This can be done by setting $debug_level in the constructor to 1 and piping the output to a file.
 e.g. perl myOBD.pl&>trace.txt
 
 
@@ -3747,6 +3834,7 @@ L<http://gts-ltd.co.uk/ELM327.php>
 
 Many thanks to:
   The authors of Win32::SerialPort and Device::SerialPort.
+  Kedar Warriner and Thomas Kaiser for their suggestions.
   Larry Wall and all the other people who have worked on Perl.
   ELM Electronics for creating the ELM327 module.
   Everyone involved with CPAN.

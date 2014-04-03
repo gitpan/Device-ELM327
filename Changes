@@ -43,3 +43,12 @@ Revision history for Device-ELM327
       Fixed a bug in the handling of results for commands 03, 07 & 0A.
       Added checking for and reporting of negative response codes and
       handling for 78 (Request Correctly Received - Response Pending).
+
+0.10	3 April 2014
+		Changed $port_name in the constructor to $port_details and added
+		code to the OpenPort function to split out and use baud rate, 
+		parity, data bit, stop bit and handshake values if supplied.
+		Previous functionality is still supported (port name or "") and
+		it is possible to just pass a baud rate value if that is the only
+		parameter that needs to change from the default values.
+		This fixes bug 93551 which asks for a way to set the baud rate.
