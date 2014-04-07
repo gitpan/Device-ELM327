@@ -29,11 +29,11 @@ Device::ELM327 - Methods for reading OBD data with an ELM327 module.
 
 =head1 VERSION
 
-Version 0.10
+Version 0.11
 
 =cut
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 #*****************************************************************
 
@@ -2319,14 +2319,14 @@ sub Show
   {
     foreach my $result (@{$response->{'results'}})
     {
-      print "$result->{'address'} - $result->{'name'}: $result->{'value'}$result->{'unit'}.";
+      print "$result->{'address'} - $result->{'name'}: $result->{'value'} $result->{'unit'}.";
       if (exists($result->{'min_limit'}))
       {
-				print " Min: $result->{'min_limit'}$result->{'unit'}.";
+				print " Min: $result->{'min_limit'} $result->{'unit'}.";
 			}
       if (exists($result->{'max_limit'}))
       {
-				print " Max: $result->{'max_limit'}$result->{'unit'}.";
+				print " Max: $result->{'max_limit'} $result->{'unit'}.";
 			}
       print "\n";
     }
@@ -2529,7 +2529,7 @@ sub Read
 									if ($unit ne "")
 									{
 										my @meanings = split(',', $unit);
-										$unit = " ($meanings[$value])";
+										$unit = "($meanings[$value])";
 									}
 								}
 
@@ -2547,7 +2547,7 @@ sub Read
 							}
 
 							
-							if ($self->{'debug_level'} > 2) { print "$id, $value, $result->{'unit'}\n"; }
+							if ($self->{'debug_level'} > 2) { print "$id, $value $unit\n"; }
 
 							if ($command eq "03" || $command eq "07" || $command eq "0A")
 							{
@@ -3147,14 +3147,15 @@ sub DecodeResponse
     if (scalar(@line_parts) > 2)
     {
       my $address = shift @line_parts;
-      $self->{'results'}->{$address}->{'response_code'} = 0;
       if (length($address) < 3)
       {
         # Not CAN ($address contains the priority byte)
-        $self->{'results'}->{$address}->{'format'} = "Other";
+				if ($self->{'debug_level'} > 4) { print "Response type: SAE J1979\n"; }
         $line_number++;
         my $recipient_address = shift @line_parts;     
         $address = shift @line_parts; # Transmitter address    
+				$self->{'results'}->{$address}->{'response_code'} = 0;
+        $self->{'results'}->{$address}->{'format'} = "Other";
         $self->{'results'}->{$address}->{'command'} = (hex(shift @line_parts) & $command_mask);
         if ($self->{'results'}->{$address}->{'command'} == 4) { push(@line_parts, "00"); }
         if ($self->{'results'}->{$address}->{'command'} == $command_mask)
@@ -3193,6 +3194,8 @@ sub DecodeResponse
       else
       {
         # CAN
+				if ($self->{'debug_level'} > 4) { print "Response type: CAN\n"; }
+				$self->{'results'}->{$address}->{'response_code'} = 0;
         $self->{'results'}->{$address}->{'format'} = "CAN";
         $line_number = hex(shift @line_parts);
     
@@ -3649,6 +3652,13 @@ sub ProcessAvailableCommands
     {
       $self->{'get'}->{$result->{'name'}}->{'available'} = $result->{'value'};
       if ($self->{'debug_level'} > 1) { print "$result->{'address'} - $result->{'name'}: $result->{'value'} $result->{'unit'}\n"; }
+			if ($self->{'debug_level'} > 4)
+			{
+				print Dumper($result);
+			}
+
+#			print Dumper($self->{'get'}->{'Location of oxygen sensors 13'});
+#			print Dumper($self->{'get'}->{'Location of oxygen sensors'});
 
       if (substr($result->{'name'}, 4, 15) eq "IDs supported (" && $result->{'value'} == 1)
       {
@@ -3666,8 +3676,15 @@ sub ProcessAvailableCommands
 					print "Old name: >$result->{'name'}<\n";
 					print "New name: >$new_name<\n";
 				}
-				
-        $self->{'get'}->{$new_name} = delete($self->{'get'}->{$result->{'name'}});
+
+				if ($result->{'name'} eq "Location of oxygen sensors 13" || $result->{'name'} eq "Location of oxygen sensors 1D")
+				{
+					$self->{'get'}->{$new_name} = $self->{'get'}->{$result->{'name'}};
+				}
+				else
+				{	
+					$self->{'get'}->{$new_name} = delete($self->{'get'}->{$result->{'name'}});
+				}
 				if ($self->{'debug_level'} > 3)
 				{
 					print Dumper($self->{'get'}->{$new_name});
@@ -3762,8 +3779,9 @@ sub Replay
         $status = eval($replay_command);
         if ($self->{'debug_level'} > 1)
         {
-          print "Status: $status\n";
+          print "Status: ";
           print Dumper($status);
+          print "\n";
         }
         $replay_state = $get_command;
       }
@@ -3835,6 +3853,7 @@ L<http://gts-ltd.co.uk/ELM327.php>
 Many thanks to:
   The authors of Win32::SerialPort and Device::SerialPort.
   Kedar Warriner and Thomas Kaiser for their suggestions.
+  George R Ahearn for sending sample SAE J1979 debug information.
   Larry Wall and all the other people who have worked on Perl.
   ELM Electronics for creating the ELM327 module.
   Everyone involved with CPAN.
