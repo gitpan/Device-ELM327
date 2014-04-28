@@ -33,9 +33,9 @@ Revision history for Device-ELM327
 
 0.08  27 May 2012
       Increased $max_ports_to_search to 64.
-			Revised the error values returned.
-			Removed obsolete DisplayTroubleCodes function.
-			Added POD for undocumented functions and reordered functions.
+		Revised the error values returned.
+		Removed obsolete DisplayTroubleCodes function.
+		Added POD for undocumented functions and reordered functions.
 
 0.09  16 October 2013
       Investigated bug #89287. Have not managed to replicate, but added
@@ -51,4 +51,13 @@ Revision history for Device-ELM327
 		Previous functionality is still supported (port name or "") and
 		it is possible to just pass a baud rate value if that is the only
 		parameter that needs to change from the default values.
-		This fixes bug 93551 which asks for a way to set the baud rate.
+		This fixes bug #93551 which asks for a way to set the baud rate.
+
+0.11	7 April 2014
+		Fixed bug #89287. Debug data allowed me to trace the problem to 
+		the code that handles packets in SAE J1979 format.
+		Also fixed a problem with processing the sensor 13/1D commands.
+
+0.12	28 April 2014
+		Fixed bug #95030. This was caused by a semantic change to qw() 
+		that was made in Perl 5.18.

@@ -19,7 +19,7 @@ BEGIN
   else
   {
     require Device::SerialPort;
-    Device::SerialPort->import qw( :PARAM :STAT 0.07 );
+    Device::SerialPort->import(qw( :PARAM :STAT 0.07 ));
   }
 }
 
@@ -29,11 +29,11 @@ Device::ELM327 - Methods for reading OBD data with an ELM327 module.
 
 =head1 VERSION
 
-Version 0.11
+Version 0.12
 
 =cut
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 
 #*****************************************************************
 
