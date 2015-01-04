@@ -3,6 +3,7 @@ package Device::ELM327;
 use strict;
 use warnings;
 use Data::Dumper;
+use Time::HiRes qw(sleep);
 
 my $null = "\x0";
 my $lf = "\xa";
@@ -29,11 +30,11 @@ Device::ELM327 - Methods for reading OBD data with an ELM327 module.
 
 =head1 VERSION
 
-Version 0.12
+Version 0.13
 
 =cut
 
-our $VERSION = '0.12';
+our $VERSION = '0.13';
 
 #*****************************************************************
 
@@ -147,6 +148,10 @@ sub new
 	$self->{'command_results'} = [];
 
 	$self->{'trouble_codes'} = [];
+
+	# ~4.5 second delay (.0001*301*(300/2))
+	$self->{'rr_tries'} = 300;
+	$self->{'rr_retry_delay'} = .0001;
 
 	# Status codes
 	$self->{'status_meanings'} = {
@@ -3018,7 +3023,14 @@ sub ReadResponse
   my $count_in = 0;
   my $string_in = "";
   my $status = "ok";
-  my $timeout = 4;  # Command 01 04 failed when timeout was 2
+#  my $timeout = 4;  # Command 01 04 failed when timeout was 2
+  
+  # Retry failed (empty) reads this many times with increasingly longer
+  # delays between each read.  Hopefully this will allow us to recover
+  # quickly when possible but still give the ECU time to respond.
+  my $tries = $self->{'rr_tries'};
+  my $try_delay = $self->{'rr_retry_delay'};
+
   my $line = "";
   $self->{'response'} = ();	# Array of strings, one per line of the response.
   $self->{'response_length'} = 0;
@@ -3027,44 +3039,70 @@ sub ReadResponse
 
   if ($self->{'replay_file'} == 0 && $self->PortOK)
   {
+    my $try = 0;
+    my $prev = '';
     do
     {
       ($count_in, $string_in) = $self->{'port'}->read($bytes_to_read);
-      if ($count_in == $bytes_to_read && $string_in ne $null)
-      {
-        $line .= $string_in;
-        $self->{'response_length'}++;
-      }
-      else
-      {
-        sleep 1;
-        $timeout--;
-      }
-    } while ($count_in == 0 && $timeout>0);
+#      if ($count_in == $bytes_to_read && $string_in ne $null)
+#      {
+#        $line .= $string_in;
+#        $self->{'response_length'}++;
+#      }
+#      else
+#      {
+#        sleep 1;
+#        $timeout--;
+#      }
+#    } while ($count_in == 0 && $timeout>0);
+#
+#    do
+#    {
+#      ($count_in, $string_in) = $self->{'port'}->read($bytes_to_read);
+      print "count_in=$count_in, string_in=$string_in\n"
+        if $self->{debug_level} > 5;
 
-    do
-    {
-      ($count_in, $string_in) = $self->{'port'}->read($bytes_to_read);
       if ($count_in == $bytes_to_read)
       {
+        # Reset our try counter each time we successfully read
+        $try = 0;
+
         if ($string_in ne ">" && $string_in ne $null)
         {
           if ($string_in eq $cr)
           {
             if ($line ne "")
             {
+              print "Adding Line: |$line| = ".length($line)."\n"
+                if $self->{debug_level} > 5;
               push @{$self->{'response'}}, $line;
               $line = "";
             }
           }
-          else
+#          else
+          elsif (index ("\r\n", $string_in) == -1 )
           {
             $line .= $string_in;
             $self->{'response_length'}++;
           }
         }
+        $prev = $string_in;
+      } 
+      elsif ($prev eq '>' && !length($line)) 
+      {
+        # '>' on a line by itself signals the end of the response
+        $try = $tries+1;
+      } 
+      else 
+      {
+        # Failed read, try again (immediatly if this is our first retry ($try == 0))
+        print "sleeping ".($try_delay * $try)." [$try of $tries]\n"
+          if $try && $self->{debug_level} > 5;
+        sleep ($try_delay * $try) if $try_delay * $try > 0;
+        $try++;
       }
-    } while ($count_in == $bytes_to_read);
+#    } while ($count_in == $bytes_to_read);
+    } while ($count_in == $bytes_to_read || $try <= $tries);
   }
   else
   {
@@ -3396,6 +3434,11 @@ default values for parity, data bits, stop bits and handshake:
  $port_details = "/dev/ttyUSB0:115200";
 or
  $port_details = "115200";
+
+On Linux you may see the error: 
+"Can't open /dev/ttyUSB0: Permission denied".
+This can be avoided by running as root or by adding your user to the 
+'dialout' group.
 
 
 This function is called by 'new'.
@@ -3852,7 +3895,8 @@ L<http://gts-ltd.co.uk/ELM327.php>
 
 Many thanks to:
   The authors of Win32::SerialPort and Device::SerialPort.
-  Kedar Warriner and Thomas Kaiser for their suggestions.
+  Kedar Warriner, Thomas Kaiser and Jason McCarver for their patches 
+  and suggestions for improvements.
   George R Ahearn for sending sample SAE J1979 debug information.
   Larry Wall and all the other people who have worked on Perl.
   ELM Electronics for creating the ELM327 module.
@@ -3860,7 +3904,7 @@ Many thanks to:
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2012 Alister Perrott.
+Copyright 2012-15 Alister Perrott.
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of either: the GNU General Public License as published

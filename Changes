@@ -61,3 +61,7 @@ Revision history for Device-ELM327
 0.12	28 April 2014
 		Fixed bug #95030. This was caused by a semantic change to qw() 
 		that was made in Perl 5.18.
+
+0.13  4 January 2015
+      Implemented the code in the patch supplied by Jason McCarver to 
+      make the ReadResponse function more robust (bug 96006).
