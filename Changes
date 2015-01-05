@@ -65,3 +65,8 @@ Revision history for Device-ELM327
 0.13  4 January 2015
       Implemented the code in the patch supplied by Jason McCarver to 
       make the ReadResponse function more robust (bug 96006).
+
+0.14  5 January 2015
+      Fixed bug #101289. Rebuilt the module using my old development
+      machine with Perl 5.10.1 and MakeMaker 6.55_02, rather than 
+      Perl 5.18.2 and MakeMaker 6.66 which are on my current machine.

@@ -1,4 +1,4 @@
-Device-ELM327 version 0.13
+Device-ELM327 version 0.14
 
 This module provides a Perl interface to a device containing an Elm Electronics ELM327 OBD Interpreter and provides access to the following functions:
 
